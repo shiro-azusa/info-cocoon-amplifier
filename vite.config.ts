@@ -11,7 +11,7 @@ export default defineConfig({
         version: "0.4.2",
         description: "AI驱动：自动识别并折叠B站评论区中的降智/引战言论",
         author: "ruozhi-filter",
-        match: ["*://www.bilibili.com/video/*"],
+        match: ["*://www.bilibili.com/video/*", "*://www.bilibili.com/list/*"],
         grant: ["GM_getValue", "GM_setValue", "GM_deleteValue", "unsafeWindow"],
         license: "MIT",
         updateURL:

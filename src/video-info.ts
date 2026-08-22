@@ -8,7 +8,8 @@ export function extractVideoInfo(): void {
   const titleEl =
     document.querySelector("h1.video-title") ??
     document.querySelector(".video-info-title .tit") ??
-    document.querySelector("[data-title]");
+    document.querySelector("[data-title]") ??
+    document.querySelector("h1");
   if (titleEl) {
     currentContext.videoTitle =
       (titleEl as HTMLElement).dataset?.title ??
@@ -57,6 +58,12 @@ export function extractVideoInfo(): void {
     } catch {
       /* */
     }
+  }
+
+  // 从 URL search params 提取 oid（稍后观看页等 list 页面的兜底）
+  if (!currentContext.oid) {
+    const oidParam = new URLSearchParams(location.search).get("oid");
+    if (oidParam) currentContext.oid = parseInt(oidParam) || 0;
   }
 
   // 从URL提取BV号 -> 可以后续用于API查询
