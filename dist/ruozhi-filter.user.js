@@ -1,14 +1,21 @@
 // ==UserScript==
 // @name         信息茧房放大器 - B站降智评论过滤器
 // @namespace    ruozhi-filter
-// @version      0.4.2
+// @version      0.4.3
 // @author       ruozhi-filter
 // @description  AI驱动：自动识别并折叠B站评论区中的降智/引战言论
 // @license      MIT
 // @downloadURL  https://update.greasyfork.org/scripts/583755/%E4%BF%A1%E6%81%AF%E8%8C%A7%E6%88%BF%E6%94%BE%E5%A4%A7%E5%99%A8%20-%20B%E7%AB%99%E9%99%8D%E6%99%BA%E8%AF%84%E8%AE%BA%E8%BF%87%E6%BB%A4%E5%99%A8.user.js
 // @updateURL    https://update.greasyfork.org/scripts/583755/%E4%BF%A1%E6%81%AF%E8%8C%A7%E6%88%BF%E6%94%BE%E5%A4%A7%E5%99%A8%20-%20B%E7%AB%99%E9%99%8D%E6%99%BA%E8%AF%84%E8%AE%BA%E8%BF%87%E6%BB%A4%E5%99%A8.meta.js
 // @match        *://www.bilibili.com/video/*
-// @connect      *
+// @match        *://www.bilibili.com/list/*
+// @connect      api.deepseek.com
+// @connect      api.openai.com
+// @connect      openrouter.ai
+// @connect      api.groq.com
+// @connect      opencode.ai
+// @connect      localhost
+// @connect      127.0.0.1
 // @grant        GM_deleteValue
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -1628,7 +1635,7 @@ ${hasProfile ? "重要：以上用户画像优先级高于基础规则。当规�
   }
   function extractVideoInfo() {
     var _a, _b, _c, _d;
-    const titleEl = document.querySelector("h1.video-title") ?? document.querySelector(".video-info-title .tit") ?? document.querySelector("[data-title]");
+    const titleEl = document.querySelector("h1.video-title") ?? document.querySelector(".video-info-title .tit") ?? document.querySelector("[data-title]") ?? document.querySelector("h1");
     if (titleEl) {
       currentContext.videoTitle = ((_a = titleEl.dataset) == null ? void 0 : _a.title) ?? titleEl.getAttribute("data-title") ?? titleEl.getAttribute("title") ?? ((_b = titleEl.textContent) == null ? void 0 : _b.trim()) ?? "";
     }
@@ -1662,6 +1669,10 @@ ${hasProfile ? "重要：以上用户画像优先级高于基础规则。当规�
         }
       } catch {
       }
+    }
+    if (!currentContext.oid) {
+      const oidParam = new URLSearchParams(location.search).get("oid");
+      if (oidParam) currentContext.oid = parseInt(oidParam) || 0;
     }
     if (!currentContext.oid) {
       location.pathname.match(/\/video\/(BV\w+)/);
