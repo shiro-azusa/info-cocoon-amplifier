@@ -2,7 +2,7 @@
 // config.ts - 配置管理和上下文状态
 // ============================================================
 import type { FilterConfig, ReplyContext } from "./types";
-import { DEFAULT_CONFIG } from "./types";
+import { DEFAULT_CONFIG, JSON_RULES_MARKER, JSON_RULES_BLOCK } from "./types";
 import { setDevMode } from "./debug";
 
 /** 缓存的配置，null 表示需要从 GM 存储加载 */
@@ -51,6 +51,13 @@ export function getConfig(): FilterConfig {
       }
       // ★ 关键修复：始终合并 DEFAULT_CONFIG，确保新增字段不会为 undefined
       const merged: FilterConfig = { ...DEFAULT_CONFIG, ...parsed };
+
+      // 迁移：v0.6.0 引入 JSON 严格规则到 prompt
+      // 已存用户的 prompt 里没有这段，会导致 AI 返回非法 JSON
+      if (!merged.prompt.includes(JSON_RULES_MARKER)) {
+        merged.prompt = merged.prompt + JSON_RULES_BLOCK;
+      }
+
       setDevMode(merged.devMode);
       _config = merged;
       return merged;
@@ -58,37 +65,11 @@ export function getConfig(): FilterConfig {
   } catch (e) {
     console.error("[ruozhi-filter]", "Config load failed:", e);
   }
-  return {
-    provider: "deepseek",
-    apiKey: "",
-    apiKeys: {},
-    apiEndpoint: "https://api.deepseek.com/chat/completions",
-    model: "deepseek-v4-flash",
-    theme: "github",
-    prompt: "",
-    foldMode: "classic" as const,
-    enableAI: true,
-    enableBlacklist: true,
-    blacklistConfirm: true,
-    devMode: false,
-    blacklistStrictness: 1,
-    pricePerMToken: 1.1,
-    sendUname: false,
-    sendMid: false,
-    sendVideoDesc: false,
-    learningEnabled: true,
-    learnedProfile: "",
-    learningCorrections: [],
-    lastRefinedCount: 0,
-    knowledgeBase: [],
-    fontScale: 1.0,
-    prefilterShort: false,
-    prefilterSymbols: false,
-    prefilterEnglish: false,
-    prefilterAtOnly: true,
-    enableRcmdFilter: false,
-    rcmdPrompt: "",
-  };
+  // 无存储或解析失败：返回 DEFAULT_CONFIG 的拷贝（新用户场景）
+  const fallback: FilterConfig = { ...DEFAULT_CONFIG };
+  setDevMode(fallback.devMode);
+  _config = fallback;
+  return fallback;
 }
 
 /** 从外部注入新配置（UI保存时调用） */

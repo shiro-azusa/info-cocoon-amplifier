@@ -84,6 +84,18 @@
       supportsJsonFormat: true
     }
   };
+  const JSON_RULES_MARKER = "[ruozhi-filter: json-rules-v1]";
+  const JSON_RULES_BLOCK = `
+
+${JSON_RULES_MARKER}
+
+JSON 输出严格规则（必须严格遵守）：
+1. 字符串值内部禁止使用 ASCII 双引号  引用他人原话改用中文引号 「」 或 “” 或 ‘’
+2. 数值字段保持纯数字（i 不能写成引号字符串或带引号数字）
+3. severity 字段是字符串，只在 none/low/medium/high/block 五个枚举值内取
+4. 输出必须是合法 JSON 对象，无 markdown 围栏，无前缀或后缀说明
+5. 仅返回 verdicts 数组，元素包含 i / violation / reason / severity 四个字段
+`;
   const DEFAULT_CONFIG = {
     provider: "deepseek",
     apiKey: "",
@@ -100,7 +112,7 @@
 - **降智煽动**：以偏概全、简化认知、传播刻板印象的明显反智言论
 - **仇恨言论**：涉及种族、地域、性别、性取向等的歧视性言论
 - **政治敏感**：各类键盘政治黑话、谐音变体、暗喻代称等隐蔽违规表述；针对国家政策、公职人员发布恶意抹黑造谣、歪曲历史的内容；涉及煽动颠覆、破坏民族团结、泄露涉密信息的言论；恶意调侃英烈、违规使用国家象征符号的相关违规内容
-- **引用/复述判断**：如果用户是在引用、复述他人的歧视言论以反驳、批评或表达反对态度，则不应判定为违规。只有当用户本人表达、认同或宣扬歧视观点时，才标记为违规`,
+- **引用/复述判断**：如果用户是在引用、复述他人的歧视言论以反驳、批评或表达反对态度，则不应判定为违规。只有当用户本人表达、认同或宣扬歧视观点时，才标记为违规${JSON_RULES_BLOCK}`,
     foldMode: "classic",
     enableAI: true,
     enableBlacklist: true,
@@ -181,6 +193,9 @@
           }
         }
         const merged = { ...DEFAULT_CONFIG, ...parsed };
+        if (!merged.prompt.includes(JSON_RULES_MARKER)) {
+          merged.prompt = merged.prompt + JSON_RULES_BLOCK;
+        }
         setDevMode(merged.devMode);
         _config = merged;
         return merged;
@@ -188,37 +203,10 @@
     } catch (e) {
       console.error("[ruozhi-filter]", "Config load failed:", e);
     }
-    return {
-      provider: "deepseek",
-      apiKey: "",
-      apiKeys: {},
-      apiEndpoint: "https://api.deepseek.com/chat/completions",
-      model: "deepseek-v4-flash",
-      theme: "github",
-      prompt: "",
-      foldMode: "classic",
-      enableAI: true,
-      enableBlacklist: true,
-      blacklistConfirm: true,
-      devMode: false,
-      blacklistStrictness: 1,
-      pricePerMToken: 1.1,
-      sendUname: false,
-      sendMid: false,
-      sendVideoDesc: false,
-      learningEnabled: true,
-      learnedProfile: "",
-      learningCorrections: [],
-      lastRefinedCount: 0,
-      knowledgeBase: [],
-      fontScale: 1,
-      prefilterShort: false,
-      prefilterSymbols: false,
-      prefilterEnglish: false,
-      prefilterAtOnly: true,
-      enableRcmdFilter: false,
-      rcmdPrompt: ""
-    };
+    const fallback = { ...DEFAULT_CONFIG };
+    setDevMode(fallback.devMode);
+    _config = fallback;
+    return fallback;
   }
   function refreshConfig(cfg) {
     _config = cfg;
