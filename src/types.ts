@@ -56,6 +56,8 @@ export interface LearningCorrection {
   aiReason?: string;
   /** AI原始判定严重度 */
   aiSeverity?: string;
+  /** 用户手动拉黑时填写的可选原因（200字内），直接喂给画像生成 */
+  userReason?: string;
   /** 用户名 */
   uname: string;
   /** 时间戳 */

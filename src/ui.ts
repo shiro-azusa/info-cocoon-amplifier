@@ -2029,6 +2029,195 @@ function blBtnDone(): Record<string, string> {
 function applyStyles(el: HTMLElement, styles: Record<string, string>): void {
   Object.assign(el.style, styles);
 }
+// ── 拉黑原因输入 modal ──
+
+const BLACKLIST_REASON_MAX = 200;
+
+function injectBlReasonStyles(): void {
+  // 每次调用重建，保证颜色跟随当前主题。
+  // 旧的元素先移除避免样式堆积。
+  document.getElementById("ruozhi-bl-reason-styles")?.remove();
+  const s = document.createElement("style");
+  s.id = "ruozhi-bl-reason-styles";
+  s.textContent = `
+.ruozhi-bl-bg {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2147483647;
+  font-family: ${FONT};
+}
+.ruozhi-bl-modal {
+  background: ${COLOR.bg};
+  color: ${COLOR.text};
+  border-radius: 10px;
+  width: 420px;
+  max-width: calc(100vw - 32px);
+  padding: 18px 20px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+}
+.ruozhi-bl-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: ${COLOR.red};
+}
+.ruozhi-bl-subtitle {
+  font-size: 13px;
+  color: ${COLOR.secondary};
+  margin-bottom: 14px;
+  line-height: 1.55;
+}
+.ruozhi-bl-field-label {
+  font-size: 12px;
+  color: ${COLOR.secondary};
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ruozhi-bl-hint {
+  font-size: 11px;
+  color: ${COLOR.muted};
+  font-weight: normal;
+}
+.ruozhi-bl-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid ${COLOR.border};
+  border-radius: 5px;
+  background: ${COLOR.surface};
+  color: ${COLOR.text};
+  font-family: ${FONT};
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 64px;
+  outline: none;
+  color-scheme: ${COLOR === THEMES.dark ? "dark" : "light"};
+}
+.ruozhi-bl-textarea:focus {
+  border-color: ${COLOR.accent};
+  box-shadow: 0 0 0 2px ${COLOR.accent}22;
+}
+.ruozhi-bl-counter {
+  font-size: 11px;
+  color: ${COLOR.muted};
+  text-align: right;
+  margin-top: 3px;
+  margin-bottom: 12px;
+}
+.ruozhi-bl-counter.over {
+  color: ${COLOR.red};
+}
+.ruozhi-bl-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.ruozhi-bl-btn {
+  padding: 7px 16px;
+  border-radius: 5px;
+  font-size: 13px;
+  font-family: ${FONT};
+  cursor: pointer;
+  border: 1px solid ${COLOR.border};
+  background: ${COLOR.surface};
+  color: ${COLOR.text};
+}
+.ruozhi-bl-btn:hover { filter: brightness(0.96); }
+.ruozhi-bl-btn.primary {
+  background: ${COLOR.red};
+  color: ${COLOR.textOnAccent};
+  border-color: ${COLOR.red};
+}
+.ruozhi-bl-btn.primary:hover { background: ${COLOR.red}; filter: brightness(0.92); }
+`;
+  document.head.appendChild(s);
+}
+
+/**
+ * 拉黑确认 modal，可选输入拉黑原因。
+ * 返回 {confirmed, reason}；取消时 confirmed=false。
+ * theme 变化后下次调用自动重新注入样式（保证颜色跟随）。
+ */
+function promptBlacklistReason(
+  uname: string,
+): Promise<{ confirmed: boolean; reason: string }> {
+  return new Promise((resolve) => {
+    injectBlReasonStyles();
+
+    const bg = document.createElement("div");
+    bg.className = "ruozhi-bl-bg";
+    const safeUname = esc(uname);
+    bg.innerHTML = `
+      <div class="ruozhi-bl-modal" role="dialog" aria-modal="true">
+        <div class="ruozhi-bl-title">将用户加入黑名单</div>
+        <div class="ruozhi-bl-subtitle">
+          将 <strong>${safeUname}</strong> 加入黑名单后，该用户的所有评论将被隐藏。
+        </div>
+        <div class="ruozhi-bl-field-label">
+          <span>拉黑原因（可选 · 200字以内）</span>
+          <span class="ruozhi-bl-hint">写下来能帮助 AI 学会你的判断标准</span>
+        </div>
+        <textarea class="ruozhi-bl-textarea" maxlength="${BLACKLIST_REASON_MAX}" placeholder="比如：阴阳怪气、总是引战、杠精…" rows="3"></textarea>
+        <div class="ruozhi-bl-counter"><span class="ruozhi-bl-count">0</span>/${BLACKLIST_REASON_MAX}</div>
+        <div class="ruozhi-bl-actions">
+          <button class="ruozhi-bl-btn" data-act="cancel">取消</button>
+          <button class="ruozhi-bl-btn primary" data-act="confirm">确定拉黑</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(bg);
+
+    const ta = bg.querySelector(".ruozhi-bl-textarea") as HTMLTextAreaElement;
+    const counterEl = bg.querySelector(".ruozhi-bl-count") as HTMLElement;
+    const counterWrap = counterEl.parentElement as HTMLElement;
+    const cancelBtn = bg.querySelector('[data-act="cancel"]') as HTMLButtonElement;
+    const confirmBtn = bg.querySelector('[data-act="confirm"]') as HTMLButtonElement;
+
+    setTimeout(() => ta.focus(), 0);
+
+    const updateCounter = () => {
+      const len = ta.value.length;
+      counterEl.textContent = String(len);
+      counterWrap.classList.toggle("over", len >= BLACKLIST_REASON_MAX);
+    };
+    ta.addEventListener("input", updateCounter);
+    updateCounter();
+
+    let settled = false;
+    const close = (result: { confirmed: boolean; reason: string }) => {
+      if (settled) return;
+      settled = true;
+      bg.remove();
+      resolve(result);
+    };
+
+    cancelBtn.addEventListener("click", () => close({ confirmed: false, reason: "" }));
+    confirmBtn.addEventListener("click", () =>
+      close({ confirmed: true, reason: ta.value.trim() }),
+    );
+    bg.addEventListener("click", (ev) => {
+      if (ev.target === bg) close({ confirmed: false, reason: "" });
+    });
+    ta.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape") {
+        ev.preventDefault();
+        close({ confirmed: false, reason: "" });
+      } else if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) {
+        ev.preventDefault();
+        close({ confirmed: true, reason: ta.value.trim() });
+      }
+    });
+  });
+}
+
 
 export function injectManualBlacklistButton(
   el: Element,
@@ -2060,22 +2249,24 @@ export function injectManualBlacklistButton(
 
     const config = getConfig();
 
-    if (
-      config.blacklistConfirm !== false &&
-      !confirm(
-        `确定要将用户 "${info.uname}" 加入黑名单吗？\n该用户的所有评论将被隐藏。`,
-      )
-    ) {
-      return;
+    let userReason = "";
+    if (config.blacklistConfirm !== false) {
+      const result = await promptBlacklistReason(info.uname);
+      if (!result.confirmed) return;
+      userReason = result.reason;
     }
 
     try {
+      const storedReason = userReason
+        ? `[手动拉黑] ${userReason}`
+        : "[手动拉黑]";
+
       await addToBlacklist({
         mid: info.mid,
         uname: info.uname,
         rpid: info.rpid,
         message: info.message,
-        reason: "[手动拉黑]",
+        reason: storedReason,
         videoTitle: currentContext.videoTitle,
         videoUrl: window.location.href,
         timestamp: Date.now(),
@@ -2086,11 +2277,12 @@ export function injectManualBlacklistButton(
       recordLearning({
         type: "manual_blacklist",
         message: info.message,
+        userReason: userReason || undefined,
         uname: info.uname,
         videoTitle: currentContext.videoTitle,
       });
 
-      log(TAG, `Manual block: ${info.uname}`);
+      log(TAG, `Manual block: ${info.uname}${userReason ? ` | 原因: ${userReason}` : ""}`);
 
       if (config.foldMode === "none") {
         hideEl(el);
@@ -2098,7 +2290,7 @@ export function injectManualBlacklistButton(
         foldEl(
           el,
           info,
-          { reason: "[手动拉黑]", severity: "block" },
+          { reason: storedReason, severity: "block" },
           config.foldMode,
         );
       }
