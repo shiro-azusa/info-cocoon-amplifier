@@ -8,6 +8,26 @@ import { log } from "./debug";
 const TAG = "[ruozhi-filter/gm-fetch]";
 
 /**
+ * GM_xmlhttpRequest 抛出的网络错误。
+ * - isConnectRefused=true 表示被脚本管理器的 @connect 白名单拦截
+ * - hostname 是出错 host（不含协议/路径），供 UI 提示用
+ */
+export class GMFetchError extends Error {
+  readonly isConnectRefused: boolean;
+  readonly hostname: string;
+
+  constructor(
+    message: string,
+    opts: { isConnectRefused?: boolean; hostname?: string } = {},
+  ) {
+    super(message);
+    this.name = "GMFetchError";
+    this.isConnectRefused = !!opts.isConnectRefused;
+    this.hostname = opts.hostname ?? "";
+  }
+}
+
+/**
  * fetch 兼容的跨域请求函数。
  *
  * - Tampermonkey 环境 → 使用 GM_xmlhttpRequest（绕过 CORS）
@@ -30,13 +50,33 @@ export async function gmFetch(
 }
 
 /**
- * 使用 GM_xmlhttpRequest 发请求，返回标准 Response 对象。
+ * 检测错误信息是否属于"@connect 白名单拒绝"模式。
+ * 覆盖 Tampermonkey / Violentmonkey / ScriptCat 常见措辞。
  */
+function isConnectRefusalMessage(msg: string): boolean {
+  if (!msg) return false;
+  const s = msg.toLowerCase();
+  return (
+    s.includes("@connect") ||
+    s.includes("not a part of") ||
+    (s.includes("refused") && s.includes("connect"))
+  );
+}
+
+function safeHostname(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "";
+  }
+}
+
 function gmFetchWithXhr(url: string, init?: RequestInit): Promise<Response> {
   return new Promise<Response>((resolve, reject) => {
     const method = init?.method ?? "GET";
     const headers = (init?.headers ?? {}) as Record<string, string>;
     const body = init?.body as string | undefined;
+    const hostname = safeHostname(url);
 
     GM_xmlhttpRequest({
       url,
@@ -55,14 +95,23 @@ function gmFetchWithXhr(url: string, init?: RequestInit): Promise<Response> {
         );
       },
       onerror: (resp) => {
+        // Violentmonkey 把拒绝原因放在 responseText，
+        // Tampermonkey / ScriptCat 放在 error 字段。
+        // 拼接后做模式匹配，兼容各家管理器。
+        const combined = [resp.error, resp.responseText]
+          .filter(Boolean)
+          .join(" | ");
+        const isRefused = isConnectRefusalMessage(combined);
+        const detail = (resp.responseText || resp.error || "").slice(0, 200);
         reject(
-          new Error(
-            `GM_xmlhttpRequest 失败: ${resp.status} ${resp.statusText}`,
+          new GMFetchError(
+            `GM_xmlhttpRequest 失败: ${resp.status} ${resp.statusText}${detail ? " - " + detail : ""}`,
+            { isConnectRefused: isRefused, hostname },
           ),
         );
       },
       ontimeout: () => {
-        reject(new Error("GM_xmlhttpRequest 超时"));
+        reject(new GMFetchError("GM_xmlhttpRequest 超时", { hostname }));
       },
       timeout: 60000,
     });

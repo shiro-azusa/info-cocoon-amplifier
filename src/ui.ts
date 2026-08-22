@@ -677,6 +677,7 @@ function buildPanelHTML(config: FilterConfig): string {
       <div style="margin-bottom:10px">
         <div style="font-size:12px;color:${COLOR.secondary};margin-bottom:4px">接口地址</div>
         <input id="ruozhi-endpoint" type="text" value="${escapeAttr(config.apiEndpoint)}" style="${is}">
+        <div style="font-size:11px;color:${COLOR.muted};margin-top:5px;line-height:1.5">使用自定义 provider 时，首次请求会提示你将其域名加入脚本的 @connect 列表。</div>
       </div>
       <div style="margin-bottom:8px">
         <div style="font-size:12px;color:${COLOR.secondary};margin-bottom:4px">Token 单价 (¥ / 百万)</div>

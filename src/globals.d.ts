@@ -36,6 +36,10 @@ interface GMXMLHttpRequestResult {
   statusText: string;
   readyState: number;
   finalUrl: string;
+  /** onerror 回调中的错误描述（Violentmonkey / ScriptCat 在此字段返回拒绝原因） */
+  error?: string;
+  /** onerror 回调中的上下文异常对象 */
+  context?: unknown;
 }
 
 declare function GM_xmlhttpRequest(options: GMXMLHttpRequestOptions): void;

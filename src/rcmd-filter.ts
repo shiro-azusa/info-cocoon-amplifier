@@ -11,7 +11,8 @@ import { getConfig } from "./config";
 import { log, warn } from "./debug";
 import { getCache, setCache } from "./db";
 import { ruozhiStats, saveStats, notifyStatsUpdate } from "./stats";
-import { gmFetch } from "./gm-fetch";
+import { gmFetch, GMFetchError } from "./gm-fetch";
+import { showConnectPrompt } from "./connect-prompt";
 
 const TAG = "[ruozhi-filter/rcmd]";
 
@@ -200,6 +201,9 @@ async function judgeCards(
     };
   } catch (err) {
     warn(TAG, "API 调用异常:", err);
+    if (err instanceof GMFetchError && err.isConnectRefused) {
+      showConnectPrompt(err.hostname);
+    }
     return { violations: [] };
   }
 }

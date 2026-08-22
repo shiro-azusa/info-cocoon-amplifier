@@ -18,7 +18,8 @@ import {
   shouldRefineProfile,
   applyRefinedProfile,
 } from "./learning";
-import { gmFetch } from "./gm-fetch";
+import { gmFetch, GMFetchError } from "./gm-fetch";
+import { showConnectPrompt, showConnectPromptModal } from "./connect-prompt";
 
 const TAG = "[ruozhi-filter]";
 
@@ -295,6 +296,9 @@ export async function batchJudge(
     }
   } catch (err) {
     console.error(TAG, "Network request failed:", err);
+    if (err instanceof GMFetchError && err.isConnectRefused) {
+      showConnectPrompt(err.hostname);
+    }
     throw err;
   }
 }
@@ -321,7 +325,10 @@ export async function testAPIConnection(
       }),
     });
     return resp.ok;
-  } catch {
+  } catch (err) {
+    if (err instanceof GMFetchError && err.isConnectRefused) {
+      showConnectPromptModal(err.hostname);
+    }
     return false;
   }
 }
@@ -440,5 +447,8 @@ async function _refineProfile(force: boolean): Promise<void> {
     }
   } catch (err) {
     console.error(TAG, "Profile update failed:", err);
+    if (err instanceof GMFetchError && err.isConnectRefused) {
+      showConnectPrompt(err.hostname);
+    }
   }
 }
