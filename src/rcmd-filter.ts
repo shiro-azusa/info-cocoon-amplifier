@@ -13,6 +13,7 @@ import { getCache, setCache } from "./db";
 import { ruozhiStats, saveStats, notifyStatsUpdate } from "./stats";
 import { gmFetch, GMFetchError } from "./gm-fetch";
 import { showConnectPrompt } from "./connect-prompt";
+import { extractJsonString } from "./api";
 
 const TAG = "[ruozhi-filter/rcmd]";
 
@@ -179,13 +180,16 @@ async function judgeCards(
       return { violations: [] };
     }
 
-    let jsonStr = content.trim();
-    if (jsonStr.startsWith("```json")) jsonStr = jsonStr.slice(7);
-    if (jsonStr.startsWith("```")) jsonStr = jsonStr.slice(3);
-    if (jsonStr.endsWith("```")) jsonStr = jsonStr.slice(0, -3);
-    jsonStr = jsonStr.trim();
-
-    const parsed = JSON.parse(jsonStr);
+    let parsed: any;
+    try {
+      parsed = JSON.parse(extractJsonString(content));
+    } catch (parseErr) {
+      warn(
+        TAG,
+        `content parse failed: ${(parseErr as Error).message} | 原始 content(前500): ${content.slice(0, 500)}`,
+      );
+      return { violations: [] };
+    }
     const violations: number[] = (parsed.verdicts ?? [])
       .filter((v: any) => v.violation)
       .map((v: any) => v.i as number);
