@@ -84,6 +84,9 @@ TypeScript · Vite · vite-plugin-monkey · IndexedDB (idb) · DeepSeek API
 <a href="https://github.com/YifanHere">
   <img src="https://github.com/YifanHere.png" width="50" height="50" style="border-radius:50%" alt="YifanHere"/>
 </a>
+<a href="https://github.com/xianhongtao">
+  <img src="https://github.com/xianhongtao.png" width="50" height="50" style="border-radius:50%" alt="xianhongtao"/>
+</a>
 
 ## License
 
