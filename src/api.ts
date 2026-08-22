@@ -71,6 +71,26 @@ function buildHeaders(config: FilterConfig): Record<string, string> {
   return h;
 }
 
+/**
+ * 根据 endpoint URL 注入 provider 特定的请求体参数。
+ * 当前实现：
+ * - MiniMax / DeepSeek: 加 thinking: { type: "disabled" } 跳过思维链
+ *   - DeepSeek 非推理模型忽略该参数
+ *   - MiniMax M2.x 老模型无法关闭 thinking，但传入参数不报错
+ *
+ * 没有配置开关——URL 匹配即强制添加。避免运行时受思维链干扰、
+ * 减少 token 浪费与解析复杂度。
+ */
+export function getProviderExtras(
+  apiEndpoint: string,
+): Record<string, unknown> {
+  const url = apiEndpoint.toLowerCase();
+  if (url.includes("minimax") || url.includes("deepseek")) {
+    return { thinking: { type: "disabled" } };
+  }
+  return {};
+}
+
 /** 构建画像更新的请求体 */
 function buildRefineBody(
   config: FilterConfig,
@@ -134,6 +154,7 @@ function buildRefineBody(
   if (preset.supportsJsonFormat) {
     body.response_format = { type: "json_object" };
   }
+  Object.assign(body, getProviderExtras(config.apiEndpoint));
   return body;
 }
 
@@ -208,6 +229,7 @@ function buildRequestBody(
   if (preset.supportsJsonFormat) {
     body.response_format = { type: "json_object" };
   }
+  Object.assign(body, getProviderExtras(config.apiEndpoint));
   return body;
 }
 
@@ -340,6 +362,7 @@ export async function testAPIConnection(
         model: config.model,
         messages: [{ role: "user", content: "ping" }],
         max_tokens: 5,
+        ...getProviderExtras(config.apiEndpoint),
       }),
     });
     return resp.ok;

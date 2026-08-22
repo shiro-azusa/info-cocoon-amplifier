@@ -13,7 +13,7 @@ import { getCache, setCache } from "./db";
 import { ruozhiStats, saveStats, notifyStatsUpdate } from "./stats";
 import { gmFetch, GMFetchError } from "./gm-fetch";
 import { showConnectPrompt } from "./connect-prompt";
-import { extractJsonString } from "./api";
+import { extractJsonString, getProviderExtras } from "./api";
 
 const TAG = "[ruozhi-filter/rcmd]";
 
@@ -139,6 +139,7 @@ async function judgeCards(
   if (preset.supportsJsonFormat) {
     body.response_format = { type: "json_object" };
   }
+  Object.assign(body, getProviderExtras(config.apiEndpoint));
 
   log(TAG, "请求体:", JSON.stringify(body));
 

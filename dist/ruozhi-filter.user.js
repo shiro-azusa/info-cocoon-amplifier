@@ -935,6 +935,13 @@ ${truncated.join("\n")}
     }
     return h;
   }
+  function getProviderExtras(apiEndpoint) {
+    const url = apiEndpoint.toLowerCase();
+    if (url.includes("minimax") || url.includes("deepseek")) {
+      return { thinking: { type: "disabled" } };
+    }
+    return {};
+  }
   function buildRefineBody(config, instruction) {
     const preset = getPreset(config);
     const body = {
@@ -994,6 +1001,7 @@ ${truncated.join("\n")}
     if (preset.supportsJsonFormat) {
       body.response_format = { type: "json_object" };
     }
+    Object.assign(body, getProviderExtras(config.apiEndpoint));
     return body;
   }
   function buildSystemPrompt$1(config, ctx) {
@@ -1049,6 +1057,7 @@ ${hasProfile ? "重要：以上用户画像优先级高于基础规则。当规�
     if (preset.supportsJsonFormat) {
       body.response_format = { type: "json_object" };
     }
+    Object.assign(body, getProviderExtras(config.apiEndpoint));
     return body;
   }
   async function batchJudge(config, replies, ctx) {
@@ -1152,7 +1161,8 @@ ${hasProfile ? "重要：以上用户画像优先级高于基础规则。当规�
         body: JSON.stringify({
           model: config.model,
           messages: [{ role: "user", content: "ping" }],
-          max_tokens: 5
+          max_tokens: 5,
+          ...getProviderExtras(config.apiEndpoint)
         })
       });
       return resp.ok;
@@ -4636,6 +4646,7 @@ ${prompt}
     if (preset.supportsJsonFormat) {
       body.response_format = { type: "json_object" };
     }
+    Object.assign(body, getProviderExtras(config.apiEndpoint));
     log(TAG$1, "请求体:", JSON.stringify(body));
     try {
       const resp = await fetcher(config.apiEndpoint, {
