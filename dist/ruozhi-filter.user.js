@@ -909,14 +909,6 @@ ${truncated.join("\n")}
     }
   }
   const TAG$7 = "[ruozhi-filter]";
-  function extractJsonString(content) {
-    let s = content.replace(/<think>[\s\S]*?<\/think>/g, "");
-    s = s.trim();
-    if (s.startsWith("```json")) s = s.slice(7);
-    else if (s.startsWith("```")) s = s.slice(3);
-    if (s.endsWith("```")) s = s.slice(0, -3);
-    return s.trim();
-  }
   function getPreset(config) {
     return PROVIDER_PRESETS[config.provider] ?? PROVIDER_PRESETS.custom;
   }
@@ -1118,7 +1110,11 @@ ${hasProfile ? "重要：以上用户画像优先级高于基础规则。当规�
         return { verdicts: [], usage };
       }
       try {
-        const jsonStr = extractJsonString(content);
+        let jsonStr = content.trim();
+        if (jsonStr.startsWith("```json")) jsonStr = jsonStr.slice(7);
+        if (jsonStr.startsWith("```")) jsonStr = jsonStr.slice(3);
+        if (jsonStr.endsWith("```")) jsonStr = jsonStr.slice(0, -3);
+        jsonStr = jsonStr.trim();
         const parsed = JSON.parse(jsonStr);
         const verdicts = (parsed.verdicts ?? []).map((v) => ({
           rpid: rpidByIndex.get(v.i) ?? v.rpid ?? 0,
@@ -1252,7 +1248,11 @@ ${hasProfile ? "重要：以上用户画像优先级高于基础规则。当规�
         );
         return;
       }
-      const jsonStr = extractJsonString(content);
+      let jsonStr = content.trim();
+      if (jsonStr.startsWith("```json")) jsonStr = jsonStr.slice(7);
+      if (jsonStr.startsWith("```")) jsonStr = jsonStr.slice(3);
+      if (jsonStr.endsWith("```")) jsonStr = jsonStr.slice(0, -3);
+      jsonStr = jsonStr.trim();
       const parsed = JSON.parse(jsonStr);
       if (parsed.refinedProfile && typeof parsed.refinedProfile === "string") {
         applyRefinedProfile(parsed.refinedProfile);
@@ -4680,16 +4680,12 @@ ${prompt}
         );
         return { violations: [] };
       }
-      let parsed;
-      try {
-        parsed = JSON.parse(extractJsonString(content));
-      } catch (parseErr) {
-        warn(
-          TAG$1,
-          `content parse failed: ${parseErr.message} | 原始 content(前500): ${content.slice(0, 500)}`
-        );
-        return { violations: [] };
-      }
+      let jsonStr = content.trim();
+      if (jsonStr.startsWith("```json")) jsonStr = jsonStr.slice(7);
+      if (jsonStr.startsWith("```")) jsonStr = jsonStr.slice(3);
+      if (jsonStr.endsWith("```")) jsonStr = jsonStr.slice(0, -3);
+      jsonStr = jsonStr.trim();
+      const parsed = JSON.parse(jsonStr);
       const violations = (parsed.verdicts ?? []).filter((v) => v.violation).map((v) => v.i);
       log(
         TAG$1,

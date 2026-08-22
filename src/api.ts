@@ -23,25 +23,6 @@ import { showConnectPrompt, showConnectPromptModal } from "./connect-prompt";
 
 const TAG = "[ruozhi-filter]";
 
-/**
- * 从 AI 响应的 content 字段中提取可 JSON.parse 的字符串。
- * 兼容：
- * - 推理模型的思维链前缀 <think>...</think> （DeepSeek R1、MiniMax、o1 等）
- *   非贪婪、跨行、支持多个块
- * - Markdown 代码块包裹（```json ... ``` 或 ``` ... ```）
- * - 前后空白
- *
- * 如果解析仍失败，调用方的 try/catch 会报到控制台。
- */
-export function extractJsonString(content: string): string {
-  let s = content.replace(/<think>[\s\S]*?<\/think>/g, "");
-  s = s.trim();
-  if (s.startsWith("```json")) s = s.slice(7);
-  else if (s.startsWith("```")) s = s.slice(3);
-  if (s.endsWith("```")) s = s.slice(0, -3);
-  return s.trim();
-}
-
 /** 根据配置判断是否为本地提供商（不需要 auth + 可能不支持 json_object） */
 function getPreset(config: FilterConfig) {
   return PROVIDER_PRESETS[config.provider] ?? PROVIDER_PRESETS.custom;
@@ -310,7 +291,11 @@ export async function batchJudge(
     }
 
     try {
-      const jsonStr = extractJsonString(content);
+      let jsonStr = content.trim();
+      if (jsonStr.startsWith("```json")) jsonStr = jsonStr.slice(7);
+      if (jsonStr.startsWith("```")) jsonStr = jsonStr.slice(3);
+      if (jsonStr.endsWith("```")) jsonStr = jsonStr.slice(0, -3);
+      jsonStr = jsonStr.trim();
       const parsed = JSON.parse(jsonStr);
       // 将紧凑格式的 i 映射回 rpid
       const verdicts: AIVerdict[] = (parsed.verdicts ?? []).map((v: any) => ({
@@ -474,7 +459,12 @@ async function _refineProfile(force: boolean): Promise<void> {
       return;
     }
 
-    const jsonStr = extractJsonString(content);
+    let jsonStr = content.trim();
+    if (jsonStr.startsWith("```json")) jsonStr = jsonStr.slice(7);
+    if (jsonStr.startsWith("```")) jsonStr = jsonStr.slice(3);
+    if (jsonStr.endsWith("```")) jsonStr = jsonStr.slice(0, -3);
+    jsonStr = jsonStr.trim();
+
     const parsed = JSON.parse(jsonStr);
     if (parsed.refinedProfile && typeof parsed.refinedProfile === "string") {
       applyRefinedProfile(parsed.refinedProfile);
