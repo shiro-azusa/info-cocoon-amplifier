@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         信息茧房放大器 - B站降智评论过滤器
 // @namespace    ruozhi-filter
-// @version      0.4.3
+// @version      0.5.0
 // @author       ruozhi-filter
 // @description  AI驱动：自动识别并折叠B站评论区中的降智/引战言论
 // @license      MIT
@@ -244,6 +244,7 @@
   }
   let refining = false;
   function recordLearning(correction) {
+    var _a;
     try {
       const config = getConfig();
       if (!config.learningEnabled) return;
@@ -253,6 +254,7 @@
       const entry = {
         ...correction,
         message: correction.message.slice(0, 200),
+        userReason: ((_a = correction.userReason) == null ? void 0 : _a.slice(0, 200)) || void 0,
         timestamp: Date.now()
       };
       const dupIdx = config.learningCorrections.findIndex(
@@ -327,8 +329,9 @@
       if (newCount < REFINE_THRESHOLD) return "";
       const correctionLines = records.map((c) => {
         const typeLabel = c.type === "manual_blacklist" ? "拉黑" : "放过";
-        const aiInfo = c.aiReason ? ` #曾判定:${c.aiReason.slice(0, 20)}` : "";
-        return `[${typeLabel}]「${c.message.slice(0, 60)}」${aiInfo}`;
+        const aiInfo = c.aiReason ? ` #AI原判:${c.aiReason.slice(0, 30)}` : "";
+        const userInfo = c.userReason ? ` #用户说:${c.userReason.slice(0, 60)}` : "";
+        return `[${typeLabel}]「${c.message.slice(0, 60)}」${aiInfo}${userInfo}`;
       });
       const totalTokens = correctionLines.join("\n").length;
       const truncated = totalTokens > 6e3 ? correctionLines.slice(
@@ -341,50 +344,44 @@
 当前画像：${currentProfile}
 
 全部纠正记录（${records.length}条，按时间倒序）：
-[放过] = 用户恢复了AI误判的内容（这些不应被过滤）
-[拉黑] = 用户手动拉黑了AI漏判的内容（这些应被过滤）
+
+每条记录以 [拉黑] 或 [放过] 开头，后跟可选标签：
+- #AI原判: AI 当时的判定理由
+- #用户说: 用户拉黑时填写的判断标准（仅有写过的拉黑记录会带；这是用户自己的话，权重高于你的推断）
+
+信号语义：
+- [放过] = AI 标为违规 → 用户主动展开 → AI 判断过头了
+- [拉黑] = AI 未拦截 / 拦截力度不足 → 用户主动拉黑 → AI 漏判或判轻了
+
 ${truncated.join("\n")}
 
-请根据以上记录，深入分析用户每次操作背后的心理动机，输出 refinedProfile：
+请提炼 refinedProfile（2000字以内，自然段落，不列维度标签，不填表）。
 
-用户的拉黑行为通常不是按"话题类型"分类，而是对内容背后的认知质量和人格特质的判断。例如：
-- "说话弱智" → 用户排斥低质量思考：以偏概全、逻辑混乱、反智简化、非黑即白的二极管思维
-- "自我中心" → 用户排斥自恋型表达：缺乏共情、把自己的感受当普世真理、无法换位思考、好为人师
-- "杠精" → 用户排斥对抗型沟通：为反驳而反驳、恶意挑刺、偷换概念、抓住无关细节否定整体、拒绝理解对方本意
-- "居高临下" → 用户排斥说教型沟通：强行输出观点、忽略对方语境、把个人看法包装成绝对真理、居高临下指导
-- "秀优越" → 用户排斥阶层感表达：凡尔赛式炫耀、打压式发言、"这都不懂"式轻视、用鄙视链建立虚假权威
-- "道德绑架" → 用户排斥审判型表达：站在道德制高点攻击、非我即敌不容讨论、用正确立场压制理性辩论
-- "情绪垃圾桶" → 用户排斥纯粹发泄：没有信息量的情绪倾倒、纯骂街、把评论区当个人情绪出口
-- "饭圈思维" → 用户排斥身份绑定立场：党同伐异、站队大于说理、用身份标签替代逻辑论证、不能就事论事
-- "阴谋论" → 用户排斥认知扭曲：捕风捉影、过度解读、凡事往最坏处想、预设恶意前提、不信任一切
-- "故意挑事" → 用户排斥破坏型参与：明知引战还要说、钓鱼、反串黑、以制造冲突为乐
-- "复读机" → 用户排斥思维懒惰：人云亦云、用流行梗代替独立表达、没有个人观点、机械复读
-- "悲观消极" → 用户排斥传播无力感：一切都很糟的末日叙事、做什么都没用的幻灭论调、在评论区散播焦虑
-- "阴阳怪气" → 用户排斥暗讽型表达：不直接说但句句带刺、反话正说、含沙射影、让人不适但不留把柄
-- "不懂装懂" → 用户排斥伪专业型：明明不懂却硬要科普、百度查完就装专家、用术语包装胡说、缺乏敬畏心
-- "过度简化" → 用户排斥简化主义："不就是XX吗"式粗暴归纳、把复杂议题压缩成口号、拒绝承认灰度与复杂性
-- "查成分" → 用户排斥人身溯源：不辩论点只翻发言者历史、用身份而非逻辑否定对方、"你是XX所以你说的不对"
-- "转移话题" → 用户排斥回避型沟通：被反驳后立刻换话题、顾左右而言他、拒绝正面回应核心问题、用新话题掩盖旧漏洞
-- "受害者表演" → 用户排斥苦情操控：夸大受害博同情、用苦难换取道德豁免、以弱者身份压制不同意见
-- "岁月静好" → 用户排斥伪中立和稀泥："两边都有问题"式各打五十大板、用伪理性压制正当批评、回避真正矛盾
-- "滑坡谬误" → 用户排斥极端化推导："今天允许XX明天就会YY"、用极端后果恐吓、放大风险到荒谬程度
-- "稻草人" → 用户排斥曲解反驳：故意歪曲对方观点后攻击、把复杂论证简化为荒谬版本再打倒
-- "装外宾" → 用户排斥假装无知："我不太懂但是我感觉"式明知故问、用假装天真包装恶意、以无辜姿态挑衅
-- "诉诸权威" → 用户排斥伪背书：用不相关领域专家站台、"科学表明"但不给出处、伪造数据支持观点
-- "万物皆蹭" → 用户排斥硬蹭热度：不管什么话题都往自己熟悉的领域带、把别人的讨论变成自己的秀场
+三个分析维度：
 
-分析要点（不要罗列行为，要揭示动机。穿透表层看深层——用户说"这人弱智"可能是表面，底下是"低质量思考浪费我的注意力"）：
-- 每条拉黑背后，用户在拒绝什么认知模式或人格特质？这种拒绝在保护他的什么心理资源？
-- 每条放过背后，用户放过时遵循了什么"宁可错放不可错杀"的价值排序？
-- 注意矛盾：放过了A却拉黑了类似的B——那个AB之间的细微差异就是用户真正的判断标准
-- 注意强度：越强烈的拉黑，说明被触碰的价值越核心
+**1. 穿透表层**（最关键）
+每条记录背后，用户在做决策时的**思维模式**和**评价框架**是什么？跳过内容本身，提取判断逻辑。
+- #用户说 标签里的字是直接信号——用户自己说出了判断标准，它比你的推断更准确，优先采纳
+- 没有 #用户说 的记录，你只能从内容本身推断，置信度低，要诚实标注
 
-画像用自然段落写（2000字以内），不要列维度标签、不要填表感。就讲清三件事：
-1. 用户在保护什么——核心价值、心理资源、想获得什么体验
-2. 用户受不了什么——什么认知模式/人格特质会触发他，为什么
-3. 用户对什么网开一面——哪些"灰色地带"他会放过，这说明了什么
+**2. 矛盾信号**（最高权重）
+用户放过 A 却拉黑了类似的 B —— AB 之间的细微差异就是用户真正的判断标准。
+- 找出所有这样的成对案例
+- 从差异中归纳：那个让 A 放过的特质是什么、让 B 拉黑的特质是什么
+- 这种从"反例"提炼的规则，比从"正例"归纳的更准
 
-在JSON响应中增加 "refinedProfile" 字段。`;
+**3. 价值层级**
+用户多次拉黑时，被保护的价值按强度排序：
+- 拉黑次数最多的 = 核心不可触碰
+- 偶尔放过但同类型也被拉黑过的 = 边缘可商量
+- 完全没拉黑过的 = 不构成价值，不进入画像
+
+画像输出三件事（自然段落，不要条目化）：
+- 用户的判断逻辑（如何决定一条评论该不该被过滤）
+- 用户的容忍边界（什么可以放过、什么必须拉黑）
+- 用户的核心价值（什么被保护得最严，说明这是最重要的）
+
+在 JSON 响应中增加 "refinedProfile" 字段。`;
     } catch {
       return "";
     }
@@ -486,6 +483,14 @@ ${truncated.join("\n")}
     }
   }
   const TAG$8 = "[ruozhi-filter/gm-fetch]";
+  class GMFetchError extends Error {
+    constructor(message, opts = {}) {
+      super(message);
+      this.name = "GMFetchError";
+      this.isConnectRefused = !!opts.isConnectRefused;
+      this.hostname = opts.hostname ?? "";
+    }
+  }
   async function gmFetch(url, init) {
     if (typeof GM_xmlhttpRequest !== "undefined") {
       return gmFetchWithXhr(url, init);
@@ -496,11 +501,24 @@ ${truncated.join("\n")}
     }
     return fetch(url, init);
   }
+  function isConnectRefusalMessage(msg) {
+    if (!msg) return false;
+    const s = msg.toLowerCase();
+    return s.includes("@connect") || s.includes("not a part of") || s.includes("refused") && s.includes("connect");
+  }
+  function safeHostname(url) {
+    try {
+      return new URL(url).hostname;
+    } catch {
+      return "";
+    }
+  }
   function gmFetchWithXhr(url, init) {
     return new Promise((resolve, reject) => {
       const method = (init == null ? void 0 : init.method) ?? "GET";
       const headers = (init == null ? void 0 : init.headers) ?? {};
       const body = init == null ? void 0 : init.body;
+      const hostname = safeHostname(url);
       GM_xmlhttpRequest({
         url,
         method,
@@ -518,14 +536,18 @@ ${truncated.join("\n")}
           );
         },
         onerror: (resp) => {
+          const combined = [resp.error, resp.responseText].filter(Boolean).join(" | ");
+          const isRefused = isConnectRefusalMessage(combined);
+          const detail = (resp.responseText || resp.error || "").slice(0, 200);
           reject(
-            new Error(
-              `GM_xmlhttpRequest 失败: ${resp.status} ${resp.statusText}`
+            new GMFetchError(
+              `GM_xmlhttpRequest 失败: ${resp.status} ${resp.statusText}${detail ? " - " + detail : ""}`,
+              { isConnectRefused: isRefused, hostname }
             )
           );
         },
         ontimeout: () => {
-          reject(new Error("GM_xmlhttpRequest 超时"));
+          reject(new GMFetchError("GM_xmlhttpRequest 超时", { hostname }));
         },
         timeout: 6e4
       });
@@ -547,7 +569,339 @@ ${truncated.join("\n")}
     }
     return headers;
   }
+  const shownThisSession = /* @__PURE__ */ new Set();
+  let toastRoot = null;
+  let modalRoot = null;
+  const STYLES = `
+.ruozhi-cp-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 360px;
+  max-width: calc(100vw - 48px);
+  background: #1f2937;
+  color: #f9fafb;
+  padding: 14px 38px 14px 16px;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.28);
+  font: 13px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+  z-index: 2147483600;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.25s, transform 0.25s;
+  pointer-events: auto;
+}
+.ruozhi-cp-toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+.ruozhi-cp-toast .title {
+  font-weight: 600;
+  margin-bottom: 6px;
+  font-size: 13.5px;
+}
+.ruozhi-cp-toast .body {
+  color: #d1d5db;
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+.ruozhi-cp-toast .body code {
+  background: #374151;
+  color: #fcd34d;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11.5px;
+}
+.ruozhi-cp-toast .code {
+  background: #111827;
+  color: #fcd34d;
+  padding: 6px 8px 6px 10px;
+  border-radius: 4px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  word-break: break-all;
+}
+.ruozhi-cp-toast .copy {
+  flex: 0 0 auto;
+  background: #374151;
+  color: #f9fafb;
+  border: none;
+  padding: 4px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.ruozhi-cp-toast .copy:hover { background: #4b5563; }
+.ruozhi-cp-toast .copy.copied { background: #047857; }
+.ruozhi-cp-toast .link {
+  color: #93c5fd;
+  cursor: pointer;
+  font-size: 12px;
+  background: none;
+  border: none;
+  padding: 0;
+  margin-top: 8px;
+  font-family: inherit;
+  text-decoration: underline dotted;
+  display: inline-block;
+}
+.ruozhi-cp-toast .link:hover { color: #bfdbfe; }
+.ruozhi-cp-toast .close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: none;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 6px;
+}
+.ruozhi-cp-toast .close:hover { color: #f9fafb; }
+
+.ruozhi-cp-modal-bg {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2147483647;
+  font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+}
+.ruozhi-cp-modal {
+  background: #ffffff;
+  color: #111827;
+  border-radius: 10px;
+  width: 480px;
+  max-width: calc(100vw - 32px);
+  padding: 20px 22px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+}
+.ruozhi-cp-modal h3 {
+  margin: 0 0 10px;
+  font-size: 16px;
+  color: #b91c1c;
+}
+.ruozhi-cp-modal p {
+  margin: 0 0 10px;
+  color: #374151;
+}
+.ruozhi-cp-modal p code {
+  background: #f3f4f6;
+  color: #1f2937;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12.5px;
+}
+.ruozhi-cp-modal .code {
+  background: #f3f4f6;
+  color: #111827;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ruozhi-cp-modal .copy {
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  padding: 5px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.ruozhi-cp-modal .copy:hover { background: #1d4ed8; }
+.ruozhi-cp-modal .copy.copied { background: #047857; }
+.ruozhi-cp-modal .steps {
+  background: #f9fafb;
+  border-left: 3px solid #2563eb;
+  padding: 10px 14px;
+  margin: 14px 0 4px;
+  border-radius: 0 4px 4px 0;
+  font-size: 13px;
+  color: #1f2937;
+}
+.ruozhi-cp-modal .steps ol { margin: 6px 0 0 18px; padding: 0; }
+.ruozhi-cp-modal .steps li { margin: 3px 0; }
+.ruozhi-cp-modal .actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+.ruozhi-cp-modal .btn {
+  padding: 7px 18px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+  border: 1px solid #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+.ruozhi-cp-modal .btn:hover { background: #1d4ed8; border-color: #1d4ed8; }
+`;
+  function ensureStyles() {
+    if (document.getElementById("ruozhi-cp-styles")) return;
+    const s = document.createElement("style");
+    s.id = "ruozhi-cp-styles";
+    s.textContent = STYLES;
+    document.head.appendChild(s);
+  }
+  function ensureToastRoot() {
+    if (!toastRoot) {
+      toastRoot = document.createElement("div");
+      toastRoot.id = "ruozhi-cp-toasts";
+      document.body.appendChild(toastRoot);
+    }
+    return toastRoot;
+  }
+  function copyText(text) {
+    var _a;
+    if ((_a = navigator.clipboard) == null ? void 0 : _a.writeText) {
+      navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+    } else {
+      fallbackCopy(text);
+    }
+  }
+  function fallbackCopy(text) {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.cssText = "position:fixed;left:-9999px;top:-9999px;opacity:0;pointer-events:none;";
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand("copy");
+    } catch {
+    }
+    ta.remove();
+  }
+  function escapeHtml(s) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+  function showConnectPrompt(hostname) {
+    var _a, _b, _c;
+    if (!hostname) return;
+    if (shownThisSession.has(hostname)) return;
+    shownThisSession.add(hostname);
+    ensureStyles();
+    const root = ensureToastRoot();
+    const t = document.createElement("div");
+    t.className = "ruozhi-cp-toast";
+    const connectLine = `// @connect      ${hostname}`;
+    t.innerHTML = `
+    <button class="close" aria-label="关闭">×</button>
+    <div class="title">需要授权新的 API 域名</div>
+    <div class="body">
+      请求 <code>${escapeHtml(hostname)}</code> 被脚本管理器拒绝，因为它不在脚本的 <code>@connect</code> 白名单中。
+    </div>
+    <div class="code">
+      <span>${escapeHtml(connectLine)}</span>
+      <button class="copy">复制</button>
+    </div>
+    <button class="link">如何修改？</button>
+  `;
+    root.appendChild(t);
+    (_a = t.querySelector(".copy")) == null ? void 0 : _a.addEventListener("click", (e) => {
+      const btn = e.currentTarget;
+      copyText(connectLine);
+      btn.textContent = "已复制";
+      btn.classList.add("copied");
+      setTimeout(() => {
+        btn.textContent = "复制";
+        btn.classList.remove("copied");
+      }, 2e3);
+    });
+    const close = () => removeToast(t);
+    (_b = t.querySelector(".close")) == null ? void 0 : _b.addEventListener("click", close);
+    (_c = t.querySelector(".link")) == null ? void 0 : _c.addEventListener("click", () => {
+      showConnectPromptModal(hostname);
+    });
+    requestAnimationFrame(() => {
+      t.classList.add("show");
+    });
+    setTimeout(close, 2e4);
+  }
+  function removeToast(t) {
+    t.classList.remove("show");
+    setTimeout(() => t.remove(), 300);
+  }
+  function showConnectPromptModal(hostname) {
+    var _a, _b;
+    if (!hostname) return;
+    ensureStyles();
+    modalRoot == null ? void 0 : modalRoot.remove();
+    const bg = document.createElement("div");
+    bg.className = "ruozhi-cp-modal-bg";
+    const connectLine = `// @connect      ${hostname}`;
+    bg.innerHTML = `
+    <div class="ruozhi-cp-modal" role="dialog" aria-modal="true">
+      <h3>连接被拒绝：域名未授权</h3>
+      <p>请求 <code>${escapeHtml(hostname)}</code> 被脚本管理器的 <code>@connect</code> 白名单拦截。</p>
+      <p>请将下面这一行添加到脚本头部，然后保存并刷新页面：</p>
+      <div class="code">
+        <span>${escapeHtml(connectLine)}</span>
+        <button class="copy">复制</button>
+      </div>
+      <div class="steps">
+        <strong>修改步骤</strong>
+        <ol>
+          <li>打开脚本管理器面板（油猴/Violentmonkey 图标）</li>
+          <li>找到本脚本，点击「编辑」</li>
+          <li>在 <code>// ==UserScript==</code> 区块里粘贴上面那行</li>
+          <li>保存，回到 B 站页面刷新</li>
+        </ol>
+      </div>
+      <div class="actions">
+        <button class="btn" data-act="ok">我知道了</button>
+      </div>
+    </div>
+  `;
+    bg.addEventListener("click", (e) => {
+      if (e.target === bg) close();
+    });
+    (_a = bg.querySelector('[data-act="ok"]')) == null ? void 0 : _a.addEventListener("click", () => close());
+    (_b = bg.querySelector(".copy")) == null ? void 0 : _b.addEventListener("click", (e) => {
+      const btn = e.currentTarget;
+      copyText(connectLine);
+      btn.textContent = "已复制";
+      btn.classList.add("copied");
+      setTimeout(() => {
+        btn.textContent = "复制";
+        btn.classList.remove("copied");
+      }, 2e3);
+    });
+    document.body.appendChild(bg);
+    modalRoot = bg;
+    function close() {
+      bg.remove();
+      if (modalRoot === bg) modalRoot = null;
+    }
+  }
   const TAG$7 = "[ruozhi-filter]";
+  function extractJsonString(content) {
+    let s = content.replace(/<think>[\s\S]*?<\/think>/g, "");
+    s = s.trim();
+    if (s.startsWith("```json")) s = s.slice(7);
+    else if (s.startsWith("```")) s = s.slice(3);
+    if (s.endsWith("```")) s = s.slice(0, -3);
+    return s.trim();
+  }
   function getPreset(config) {
     return PROVIDER_PRESETS[config.provider] ?? PROVIDER_PRESETS.custom;
   }
@@ -740,11 +1094,7 @@ ${hasProfile ? "重要：以上用户画像优先级高于基础规则。当规�
         return { verdicts: [], usage };
       }
       try {
-        let jsonStr = content.trim();
-        if (jsonStr.startsWith("```json")) jsonStr = jsonStr.slice(7);
-        if (jsonStr.startsWith("```")) jsonStr = jsonStr.slice(3);
-        if (jsonStr.endsWith("```")) jsonStr = jsonStr.slice(0, -3);
-        jsonStr = jsonStr.trim();
+        const jsonStr = extractJsonString(content);
         const parsed = JSON.parse(jsonStr);
         const verdicts = (parsed.verdicts ?? []).map((v) => ({
           rpid: rpidByIndex.get(v.i) ?? v.rpid ?? 0,
@@ -758,11 +1108,17 @@ ${hasProfile ? "重要：以上用户画像优先级高于基础规则。当规�
         }
         return { verdicts, usage };
       } catch (e) {
-        console.error(TAG$7, "AI response parse failed:", e);
+        console.error(
+          TAG$7,
+          `AI response parse failed: ${e.message} | content(前300): ${content.slice(0, 300)}`
+        );
         return { verdicts: [], usage };
       }
     } catch (err) {
       console.error(TAG$7, "Network request failed:", err);
+      if (err instanceof GMFetchError && err.isConnectRefused) {
+        showConnectPrompt(err.hostname);
+      }
       throw err;
     }
   }
@@ -785,7 +1141,10 @@ ${hasProfile ? "重要：以上用户画像优先级高于基础规则。当规�
         })
       });
       return resp.ok;
-    } catch {
+    } catch (err) {
+      if (err instanceof GMFetchError && err.isConnectRefused) {
+        showConnectPromptModal(err.hostname);
+      }
       return false;
     }
   }
@@ -868,11 +1227,7 @@ ${hasProfile ? "重要：以上用户画像优先级高于基础规则。当规�
         );
         return;
       }
-      let jsonStr = content.trim();
-      if (jsonStr.startsWith("```json")) jsonStr = jsonStr.slice(7);
-      if (jsonStr.startsWith("```")) jsonStr = jsonStr.slice(3);
-      if (jsonStr.endsWith("```")) jsonStr = jsonStr.slice(0, -3);
-      jsonStr = jsonStr.trim();
+      const jsonStr = extractJsonString(content);
       const parsed = JSON.parse(jsonStr);
       if (parsed.refinedProfile && typeof parsed.refinedProfile === "string") {
         applyRefinedProfile(parsed.refinedProfile);
@@ -881,6 +1236,9 @@ ${hasProfile ? "重要：以上用户画像优先级高于基础规则。当规�
       }
     } catch (err) {
       console.error(TAG$7, "Profile update failed:", err);
+      if (err instanceof GMFetchError && err.isConnectRefused) {
+        showConnectPrompt(err.hostname);
+      }
     }
   }
   const instanceOfAny = (object, constructors) => constructors.some((c) => object instanceof c);
@@ -2776,6 +3134,7 @@ ${hasProfile ? "重要：以上用户画像优先级高于基础规则。当规�
       <div style="margin-bottom:10px">
         <div style="font-size:12px;color:${COLOR.secondary};margin-bottom:4px">接口地址</div>
         <input id="ruozhi-endpoint" type="text" value="${escapeAttr(config.apiEndpoint)}" style="${is}">
+        <div style="font-size:11px;color:${COLOR.muted};margin-top:5px;line-height:1.5">使用自定义 provider 时，首次请求会提示你将其域名加入脚本的 @connect 列表。</div>
       </div>
       <div style="margin-bottom:8px">
         <div style="font-size:12px;color:${COLOR.secondary};margin-bottom:4px">Token 单价 (¥ / 百万)</div>
@@ -3834,6 +4193,177 @@ ${hasProfile ? "重要：以上用户画像优先级高于基础规则。当规�
   function applyStyles(el, styles) {
     Object.assign(el.style, styles);
   }
+  const BLACKLIST_REASON_MAX = 200;
+  function injectBlReasonStyles() {
+    var _a;
+    (_a = document.getElementById("ruozhi-bl-reason-styles")) == null ? void 0 : _a.remove();
+    const s = document.createElement("style");
+    s.id = "ruozhi-bl-reason-styles";
+    s.textContent = `
+.ruozhi-bl-bg {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2147483647;
+  font-family: ${FONT};
+}
+.ruozhi-bl-modal {
+  background: ${COLOR.bg};
+  color: ${COLOR.text};
+  border-radius: 10px;
+  width: 420px;
+  max-width: calc(100vw - 32px);
+  padding: 18px 20px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+}
+.ruozhi-bl-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: ${COLOR.red};
+}
+.ruozhi-bl-subtitle {
+  font-size: 13px;
+  color: ${COLOR.secondary};
+  margin-bottom: 14px;
+  line-height: 1.55;
+}
+.ruozhi-bl-field-label {
+  font-size: 12px;
+  color: ${COLOR.secondary};
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ruozhi-bl-hint {
+  font-size: 11px;
+  color: ${COLOR.muted};
+  font-weight: normal;
+}
+.ruozhi-bl-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid ${COLOR.border};
+  border-radius: 5px;
+  background: ${COLOR.surface};
+  color: ${COLOR.text};
+  font-family: ${FONT};
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 64px;
+  outline: none;
+  color-scheme: ${COLOR === THEMES.dark ? "dark" : "light"};
+}
+.ruozhi-bl-textarea:focus {
+  border-color: ${COLOR.accent};
+  box-shadow: 0 0 0 2px ${COLOR.accent}22;
+}
+.ruozhi-bl-counter {
+  font-size: 11px;
+  color: ${COLOR.muted};
+  text-align: right;
+  margin-top: 3px;
+  margin-bottom: 12px;
+}
+.ruozhi-bl-counter.over {
+  color: ${COLOR.red};
+}
+.ruozhi-bl-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.ruozhi-bl-btn {
+  padding: 7px 16px;
+  border-radius: 5px;
+  font-size: 13px;
+  font-family: ${FONT};
+  cursor: pointer;
+  border: 1px solid ${COLOR.border};
+  background: ${COLOR.surface};
+  color: ${COLOR.text};
+}
+.ruozhi-bl-btn:hover { filter: brightness(0.96); }
+.ruozhi-bl-btn.primary {
+  background: ${COLOR.red};
+  color: ${COLOR.textOnAccent};
+  border-color: ${COLOR.red};
+}
+.ruozhi-bl-btn.primary:hover { background: ${COLOR.red}; filter: brightness(0.92); }
+`;
+    document.head.appendChild(s);
+  }
+  function promptBlacklistReason(uname) {
+    return new Promise((resolve) => {
+      injectBlReasonStyles();
+      const bg = document.createElement("div");
+      bg.className = "ruozhi-bl-bg";
+      const safeUname = esc(uname);
+      bg.innerHTML = `
+      <div class="ruozhi-bl-modal" role="dialog" aria-modal="true">
+        <div class="ruozhi-bl-title">将用户加入黑名单</div>
+        <div class="ruozhi-bl-subtitle">
+          将 <strong>${safeUname}</strong> 加入黑名单后，该用户的所有评论将被隐藏。
+        </div>
+        <div class="ruozhi-bl-field-label">
+          <span>拉黑原因（可选 · 200字以内）</span>
+          <span class="ruozhi-bl-hint">写下来能帮助 AI 学会你的判断标准</span>
+        </div>
+        <textarea class="ruozhi-bl-textarea" maxlength="${BLACKLIST_REASON_MAX}" placeholder="比如：阴阳怪气、总是引战、杠精…" rows="3"></textarea>
+        <div class="ruozhi-bl-counter"><span class="ruozhi-bl-count">0</span>/${BLACKLIST_REASON_MAX}</div>
+        <div class="ruozhi-bl-actions">
+          <button class="ruozhi-bl-btn" data-act="cancel">取消</button>
+          <button class="ruozhi-bl-btn primary" data-act="confirm">确定拉黑</button>
+        </div>
+      </div>
+    `;
+      document.body.appendChild(bg);
+      const ta = bg.querySelector(".ruozhi-bl-textarea");
+      const counterEl = bg.querySelector(".ruozhi-bl-count");
+      const counterWrap = counterEl.parentElement;
+      const cancelBtn = bg.querySelector('[data-act="cancel"]');
+      const confirmBtn = bg.querySelector('[data-act="confirm"]');
+      setTimeout(() => ta.focus(), 0);
+      const updateCounter = () => {
+        const len = ta.value.length;
+        counterEl.textContent = String(len);
+        counterWrap.classList.toggle("over", len >= BLACKLIST_REASON_MAX);
+      };
+      ta.addEventListener("input", updateCounter);
+      updateCounter();
+      let settled = false;
+      const close = (result) => {
+        if (settled) return;
+        settled = true;
+        bg.remove();
+        resolve(result);
+      };
+      cancelBtn.addEventListener("click", () => close({ confirmed: false, reason: "" }));
+      confirmBtn.addEventListener(
+        "click",
+        () => close({ confirmed: true, reason: ta.value.trim() })
+      );
+      bg.addEventListener("click", (ev) => {
+        if (ev.target === bg) close({ confirmed: false, reason: "" });
+      });
+      ta.addEventListener("keydown", (ev) => {
+        if (ev.key === "Escape") {
+          ev.preventDefault();
+          close({ confirmed: false, reason: "" });
+        } else if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) {
+          ev.preventDefault();
+          close({ confirmed: true, reason: ta.value.trim() });
+        }
+      });
+    });
+  }
   function injectManualBlacklistButton(el, info) {
     if (blacklistButtonInjected.has(el)) return;
     blacklistButtonInjected.add(el);
@@ -3854,19 +4384,20 @@ ${hasProfile ? "重要：以上用户画像优先级高于基础规则。当规�
       e.stopPropagation();
       e.preventDefault();
       const config = getConfig();
-      if (config.blacklistConfirm !== false && !confirm(
-        `确定要将用户 "${info.uname}" 加入黑名单吗？
-该用户的所有评论将被隐藏。`
-      )) {
-        return;
+      let userReason = "";
+      if (config.blacklistConfirm !== false) {
+        const result = await promptBlacklistReason(info.uname);
+        if (!result.confirmed) return;
+        userReason = result.reason;
       }
       try {
+        const storedReason = userReason ? `[手动拉黑] ${userReason}` : "[手动拉黑]";
         await addToBlacklist({
           mid: info.mid,
           uname: info.uname,
           rpid: info.rpid,
           message: info.message,
-          reason: "[手动拉黑]",
+          reason: storedReason,
           videoTitle: currentContext.videoTitle,
           videoUrl: window.location.href,
           timestamp: Date.now(),
@@ -3876,17 +4407,18 @@ ${hasProfile ? "重要：以上用户画像优先级高于基础规则。当规�
         recordLearning({
           type: "manual_blacklist",
           message: info.message,
+          userReason: userReason || void 0,
           uname: info.uname,
           videoTitle: currentContext.videoTitle
         });
-        log(TAG$2, `Manual block: ${info.uname}`);
+        log(TAG$2, `Manual block: ${info.uname}${userReason ? ` | 原因: ${userReason}` : ""}`);
         if (config.foldMode === "none") {
           hideEl(el);
         } else {
           foldEl(
             el,
             info,
-            { reason: "[手动拉黑]", severity: "block" },
+            { reason: storedReason, severity: "block" },
             config.foldMode
           );
         }
@@ -4034,12 +4566,16 @@ ${prompt}
         );
         return { violations: [] };
       }
-      let jsonStr = content.trim();
-      if (jsonStr.startsWith("```json")) jsonStr = jsonStr.slice(7);
-      if (jsonStr.startsWith("```")) jsonStr = jsonStr.slice(3);
-      if (jsonStr.endsWith("```")) jsonStr = jsonStr.slice(0, -3);
-      jsonStr = jsonStr.trim();
-      const parsed = JSON.parse(jsonStr);
+      let parsed;
+      try {
+        parsed = JSON.parse(extractJsonString(content));
+      } catch (parseErr) {
+        warn(
+          TAG$1,
+          `content parse failed: ${parseErr.message} | 原始 content(前500): ${content.slice(0, 500)}`
+        );
+        return { violations: [] };
+      }
       const violations = (parsed.verdicts ?? []).filter((v) => v.violation).map((v) => v.i);
       log(
         TAG$1,
@@ -4054,6 +4590,9 @@ ${prompt}
       };
     } catch (err) {
       warn(TAG$1, "API 调用异常:", err);
+      if (err instanceof GMFetchError && err.isConnectRefused) {
+        showConnectPrompt(err.hostname);
+      }
       return { violations: [] };
     }
   }
