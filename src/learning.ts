@@ -332,6 +332,29 @@ export function removeLearning(index: number): void {
   }
 }
 
+/**
+ * 编辑某条学习记录的 userReason。
+ * reason 为空字符串表示清除该字段（等同于 '未填原因'）。
+ * 200 字截断。
+ */
+export function updateLearningReason(index: number, reason: string): void {
+  try {
+    const config = getConfig();
+    if (!Array.isArray(config.learningCorrections)) return;
+    if (index < 0 || index >= config.learningCorrections.length) return;
+
+    const trimmed = reason.trim().slice(0, 200);
+    if (trimmed) {
+      config.learningCorrections[index].userReason = trimmed;
+    } else {
+      delete config.learningCorrections[index].userReason;
+    }
+    persist(config);
+  } catch {
+    /* */
+  }
+}
+
 export function clearLearning(): void {
   try {
     const config = getConfig();

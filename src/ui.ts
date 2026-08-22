@@ -32,6 +32,7 @@ import {
   getLearningStats,
   getLearningRecords,
   removeLearning,
+  updateLearningReason,
   getLearnedProfile,
   getPendingCount,
 } from "./learning";
@@ -1661,11 +1662,19 @@ function buildLearningPanelHTML(): string {
       const aiReasonHTML = r.aiReason
         ? `<div style="font-size:11px;color:${COLOR.amber};margin-top:2px">AI 曾判定: ${esc(r.aiReason)}${r.aiSeverity ? ` (${r.aiSeverity})` : ""}</div>`
         : "";
+      const userReasonHTML = r.userReason
+        ? `<div style="font-size:11px;color:${COLOR.purple};background:${COLOR.purpleBg};padding:4px 8px;border-radius:4px;margin-top:4px;line-height:1.5">用户原因: ${esc(r.userReason)}</div>`
+        : "";
+      const editLabel = r.userReason ? "编辑原因" : "添加原因";
       return `
       <div style="padding:10px 12px;border-bottom:1px solid ${COLOR.border};font-size:13px;font-family:${FONT}">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
           <span style="color:${color};font-weight:500;font-size:12px">${label}</span>
-          <div style="display:flex;align-items:center;gap:8px">
+          <div style="display:flex;align-items:center;gap:6px">
+            <button class="ruozhi-edit-reason" data-index="${i}"
+              style="padding:1px 6px;font-size:10px;background:none;border:1px solid ${COLOR.purple}55;border-radius:3px;color:${COLOR.purple};cursor:pointer;font-family:${FONT}">
+              ${editLabel}
+            </button>
             <span style="font-size:10px;color:${COLOR.muted}">${date}</span>
             <button class="ruozhi-remove-learning" data-index="${i}"
               style="padding:1px 6px;font-size:10px;background:none;border:1px solid ${COLOR.border};border-radius:3px;color:${COLOR.secondary};cursor:pointer;font-family:${FONT}">
@@ -1675,6 +1684,7 @@ function buildLearningPanelHTML(): string {
         </div>
         <div style="color:${COLOR.text};line-height:1.5;word-break:break-word">${esc(r.message)}</div>
         ${aiReasonHTML}
+        ${userReasonHTML}
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
           <span style="font-size:10px;color:${COLOR.muted}">${esc(r.uname)}</span>
           ${r.videoTitle ? `<span style="font-size:10px;color:${COLOR.muted}">${esc(r.videoTitle.slice(0, 20))}${r.videoTitle.length > 20 ? "…" : ""}</span>` : ""}
@@ -1694,6 +1704,23 @@ function buildLearningPanelHTML(): string {
 }
 
 function bindLearningEvents(container: Element): void {
+  container.querySelectorAll(".ruozhi-edit-reason").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const index = parseInt((btn as HTMLElement).dataset.index ?? "-1");
+      if (index < 0) return;
+      const records = getLearningRecords();
+      if (index >= records.length) return;
+      const record = records[index];
+      const result = await promptEditReason(
+        record.userReason ?? "",
+        record.message,
+      );
+      if (!result.saved) return;
+      updateLearningReason(index, result.reason);
+      refreshLearningPanel(container);
+    });
+  });
+
   container.querySelectorAll(".ruozhi-remove-learning").forEach((btn) => {
     btn.addEventListener("click", () => {
       const index = parseInt((btn as HTMLElement).dataset.index ?? "-1");
@@ -2213,6 +2240,86 @@ function promptBlacklistReason(
       } else if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) {
         ev.preventDefault();
         close({ confirmed: true, reason: ta.value.trim() });
+      }
+    });
+  });
+}
+
+/**
+ * 编辑拉黑原因 modal。复用 injectBlReasonStyles()。
+ * 返回 {saved, reason}：取消时 saved=false；保存时 reason 是去空白后的内容（可能为空字符串，表示清除）。
+ */
+function promptEditReason(
+  initialReason: string,
+  messagePreview: string,
+): Promise<{ saved: boolean; reason: string }> {
+  return new Promise((resolve) => {
+    injectBlReasonStyles();
+
+    const bg = document.createElement("div");
+    bg.className = "ruozhi-bl-bg";
+    const preview = esc(messagePreview.slice(0, 80)) + (messagePreview.length > 80 ? "…" : "");
+    const initial = esc(initialReason);
+    bg.innerHTML = `
+      <div class="ruozhi-bl-modal" role="dialog" aria-modal="true">
+        <div class="ruozhi-bl-title">编辑拉黑原因</div>
+        <div class="ruozhi-bl-subtitle">
+          「${preview}」
+        </div>
+        <div class="ruozhi-bl-field-label">
+          <span>拉黑原因（200字以内）</span>
+          <span class="ruozhi-bl-hint">留空则清除该原因</span>
+        </div>
+        <textarea class="ruozhi-bl-textarea" maxlength="${BLACKLIST_REASON_MAX}" rows="3">${initial}</textarea>
+        <div class="ruozhi-bl-counter"><span class="ruozhi-bl-count">${initialReason.length}</span>/${BLACKLIST_REASON_MAX}</div>
+        <div class="ruozhi-bl-actions">
+          <button class="ruozhi-bl-btn" data-act="cancel">取消</button>
+          <button class="ruozhi-bl-btn primary" data-act="save">保存</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(bg);
+
+    const ta = bg.querySelector(".ruozhi-bl-textarea") as HTMLTextAreaElement;
+    const counterEl = bg.querySelector(".ruozhi-bl-count") as HTMLElement;
+    const counterWrap = counterEl.parentElement as HTMLElement;
+    const cancelBtn = bg.querySelector('[data-act="cancel"]') as HTMLButtonElement;
+    const saveBtn = bg.querySelector('[data-act="save"]') as HTMLButtonElement;
+
+    setTimeout(() => {
+      ta.focus();
+      // 全选方便用户直接覆盖重写
+      ta.select();
+    }, 0);
+
+    const updateCounter = () => {
+      const len = ta.value.length;
+      counterEl.textContent = String(len);
+      counterWrap.classList.toggle("over", len >= BLACKLIST_REASON_MAX);
+    };
+    ta.addEventListener("input", updateCounter);
+    updateCounter();
+
+    let settled = false;
+    const close = (result: { saved: boolean; reason: string }) => {
+      if (settled) return;
+      settled = true;
+      bg.remove();
+      resolve(result);
+    };
+
+    cancelBtn.addEventListener("click", () => close({ saved: false, reason: "" }));
+    saveBtn.addEventListener("click", () => close({ saved: true, reason: ta.value.trim() }));
+    bg.addEventListener("click", (ev) => {
+      if (ev.target === bg) close({ saved: false, reason: "" });
+    });
+    ta.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape") {
+        ev.preventDefault();
+        close({ saved: false, reason: "" });
+      } else if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) {
+        ev.preventDefault();
+        close({ saved: true, reason: ta.value.trim() });
       }
     });
   });
