@@ -56,8 +56,6 @@ export interface LearningCorrection {
   aiReason?: string;
   /** AI原始判定严重度 */
   aiSeverity?: string;
-  /** 用户手动拉黑时填写的可选原因（200字内），直接喂给画像生成 */
-  userReason?: string;
   /** 用户名 */
   uname: string;
   /** 时间戳 */
@@ -206,6 +204,10 @@ export interface FilterConfig {
   enableRcmdFilter: boolean;
   /** [测试版] 推荐视频过滤的 Prompt，为空则复用主 Prompt */
   rcmdPrompt: string;
+  /** B站黑名单同步模式: off=关闭, manual=仅手动拉黑, auto=按等级, strict=任何违规都同步 */
+  syncBlockMode: "off" | "manual" | "auto" | "strict";
+  /** auto 模式下，触发同步拉黑的严重度列表 */
+  syncBlockSeverities: AIVerdict["severity"][];
 }
 
 /** AI判定结果: 单条评论的违规判定 */
@@ -272,27 +274,6 @@ export interface ReplyContext {
   videoDesc: string;
 }
 
-/**
- * JSON 输出严格规则块——v0.6.0 引入。
- * 解决 reason 字符串内部使用 ASCII 双引号导致的 JSON.parse 失败。
- *
- * 检测逻辑：config.ts 加载时检查用户 prompt 是否含 JSON_RULES_MARKER，
- * 没有则补上（已含则跳过）。下次 v0.6.0+ 安装时默认配置已自带。
- */
-export const JSON_RULES_MARKER = "[ruozhi-filter: json-rules-v1]";
-
-export const JSON_RULES_BLOCK = `
-
-${JSON_RULES_MARKER}
-
-JSON 输出严格规则（必须严格遵守）：
-1. 字符串值内部禁止使用 ASCII 双引号  引用他人原话改用中文引号 「」 或 “” 或 ‘’
-2. 数值字段保持纯数字（i 不能写成引号字符串或带引号数字）
-3. severity 字段是字符串，只在 none/low/medium/high/block 五个枚举值内取
-4. 输出必须是合法 JSON 对象，无 markdown 围栏，无前缀或后缀说明
-5. 仅返回 verdicts 数组，元素包含 i / violation / reason / severity 四个字段
-`;
-
 /** 默认配置 */
 export const DEFAULT_CONFIG: FilterConfig = {
   provider: "deepseek",
@@ -310,7 +291,7 @@ export const DEFAULT_CONFIG: FilterConfig = {
 - **降智煽动**：以偏概全、简化认知、传播刻板印象的明显反智言论
 - **仇恨言论**：涉及种族、地域、性别、性取向等的歧视性言论
 - **政治敏感**：各类键盘政治黑话、谐音变体、暗喻代称等隐蔽违规表述；针对国家政策、公职人员发布恶意抹黑造谣、歪曲历史的内容；涉及煽动颠覆、破坏民族团结、泄露涉密信息的言论；恶意调侃英烈、违规使用国家象征符号的相关违规内容
-- **引用/复述判断**：如果用户是在引用、复述他人的歧视言论以反驳、批评或表达反对态度，则不应判定为违规。只有当用户本人表达、认同或宣扬歧视观点时，才标记为违规${JSON_RULES_BLOCK}`,
+- **引用/复述判断**：如果用户是在引用、复述他人的歧视言论以反驳、批评或表达反对态度，则不应判定为违规。只有当用户本人表达、认同或宣扬歧视观点时，才标记为违规`,
   foldMode: "classic",
   enableAI: true,
   enableBlacklist: true,
@@ -331,6 +312,8 @@ export const DEFAULT_CONFIG: FilterConfig = {
   prefilterSymbols: false,
   prefilterEnglish: false,
   prefilterAtOnly: true,
+  syncBlockMode: "off",
+  syncBlockSeverities: ["high", "block"],
   enableRcmdFilter: false,
   rcmdPrompt: `判断视频标题是否具有明显煽动性、引战倾向或极端化特征。
 
