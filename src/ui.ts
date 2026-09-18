@@ -26,6 +26,8 @@ import {
   addToBlacklist,
   shouldSyncToBilibili,
   syncBlockToBilibili,
+  shouldSyncUnblock,
+  syncUnblockFromBilibili,
 } from "./db";
 import { triggerReport, triggerQuickReport, copyReason } from "./report";
 import { resetStats, refreshConfig, currentContext } from "./interceptor";
@@ -783,6 +785,13 @@ function buildPanelHTML(config: FilterConfig): string {
           <label style="${subChkRow}"><input type="checkbox" class="ruozhi-sync-sev" value="high" ${(config.syncBlockSeverities ?? []).includes("high") ? "checked" : ""} style="accent-color:${COLOR.accent}">严重</label>
           <label style="${subChkRow}"><input type="checkbox" class="ruozhi-sync-sev" value="block" ${(config.syncBlockSeverities ?? []).includes("block") ? "checked" : ""} style="accent-color:${COLOR.accent}">拉黑</label>
         </div>
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid ${COLOR.border}">
+        <label style="${chkRow}">
+          <input id="ruozhi-sync-unblock" type="checkbox" ${cb(config.syncUnblock ?? false)} style="accent-color:${COLOR.accent}">
+          取消拉黑时同步解除 B站拉黑
+        </label>
+        <div style="font-size:11px;color:${COLOR.muted};margin-left:24px;margin-top:2px">仅在手动点击「取消拉黑」或黑名单列表「移除」时生效，默认关闭</div>
+      </div>
       </div>
     </div>
 
@@ -1054,6 +1063,9 @@ function bindPanelEvents(
           syncBlockSeverities: Array.from(
               root.querySelectorAll(".ruozhi-sync-sev:checked"),
           ).map((el) => (el as HTMLInputElement).value as AIVerdict["severity"]),
+        syncUnblock:
+            (root.querySelector("#ruozhi-sync-unblock") as HTMLInputElement)
+                ?.checked ?? false,
       };
       saveConfig(newConfig);
       onConfigChange(newConfig);
@@ -1175,7 +1187,12 @@ function bindPanelEvents(
   root
     .querySelector("#ruozhi-clear-bl")
     ?.addEventListener("click", async () => {
-      if (!confirm("确定清空所有黑名单记录？此操作不可撤销。")) return;
+      if (
+        !confirm(
+          "确定清空所有本地黑名单记录？\n\n注意：此操作不会解除 B站账号的拉黑，B站黑名单不受影响。",
+        )
+      )
+        return;
       await clearBlacklist();
       _blCache = null;
       showPanelStatus(root, "黑名单已清空", COLOR.green);
@@ -1634,17 +1651,29 @@ export async function buildBlacklistPanelHTML(): Promise<string> {
 }
 
 function bindBlacklistEvents(container: Element): void {
-  container.querySelectorAll(".ruozhi-remove-bl").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const mid = parseInt((btn as HTMLElement).dataset.mid ?? "0");
-      if (mid) {
-        await removeFromBlacklist(mid);
-        _blCache = null;
-        const root = container.closest("#ruozhi-panel") as HTMLElement;
-        if (root) loadBlacklistChunk(root, 0);
-      }
+    container.querySelectorAll(".ruozhi-remove-bl").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+            const mid = parseInt((btn as HTMLElement).dataset.mid ?? "0");
+            if (!mid) return;
+
+            // 若开启了同步解除，询问是否同时解 B站
+            let alsoUnblockBili = false;
+            if (shouldSyncUnblock()) {
+                alsoUnblockBili = confirm(
+                    "是否同时从 B站账号黑名单中解除该用户的拉黑？\n\n点「确定」= 同时解除 B站拉黑\n点「取消」= 仅删除本地记录",
+                );
+            }
+
+            await removeFromBlacklist(mid);
+            if (alsoUnblockBili) {
+                syncUnblockFromBilibili(mid).catch(() => { });
+            }
+
+            _blCache = null;
+            const root = container.closest("#ruozhi-panel") as HTMLElement;
+            if (root) loadBlacklistChunk(root, 0);
+        });
     });
-  });
 }
 
 // ──────────────────────────────────────────────
@@ -1925,6 +1954,10 @@ export function foldEl(
             const hash = commentHash(info.message, info.mid);
             await removeFromBlacklist(blRecord.mid);
             await deleteCommentFromCache(hash);
+            // 同步解除 B站拉黑（仅当配置开启时）
+            if (blRecord.mid > 0 && shouldSyncUnblock()) {
+              syncUnblockFromBilibili(blRecord.mid).catch(() => {});
+            }
             recordLearning({
               type: "unblock",
               message: info.message,
