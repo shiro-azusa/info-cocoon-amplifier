@@ -222,7 +222,7 @@ JSON 输出严格规则（必须严格遵守）：
     if (ctx.videoTitle) currentContext.videoTitle = ctx.videoTitle;
     if (ctx.videoDesc) currentContext.videoDesc = ctx.videoDesc;
   }
-  const TAG$9 = "[ruozhi-filter]";
+  const TAG$a = "[ruozhi-filter]";
   const MAX_CORRECTIONS = 500;
   const REFINE_THRESHOLD = 20;
   const MAX_PROFILE_LENGTH = 2e3;
@@ -258,7 +258,7 @@ JSON 输出严格规则（必须严格遵守）：
       const newSinceLast = config.learningCorrections.length - (config.lastRefinedCount ?? 0);
       persist(config);
       log(
-        TAG$9,
+        TAG$a,
         `学习记录: ${entry.type} | 总${config.learningCorrections.length}条 | 新${newSinceLast}条 | 画像${config.learnedProfile ? "✓" : "✗"}`
       );
       if (newSinceLast >= REFINE_THRESHOLD && refineCallback && !refining) {
@@ -268,7 +268,7 @@ JSON 输出严格规则（必须严格遵守）：
         });
       }
     } catch (err) {
-      console.warn(TAG$9, " 学习记录失败:", err);
+      console.warn(TAG$a, " 学习记录失败:", err);
     }
   }
   function buildLearningPrompt() {
@@ -385,11 +385,11 @@ ${truncated.join("\n")}
       config.lastRefinedCount = ((_a = config.learningCorrections) == null ? void 0 : _a.length) ?? 0;
       persist(config);
       log(
-        TAG$9,
+        TAG$a,
         ` 画像已更新 (${trimmed.length}字) | 已处理${config.lastRefinedCount}条 | 新画像: ${trimmed.slice(0, 80)}…`
       );
     } catch (err) {
-      console.warn(TAG$9, " 画像保存失败:", err);
+      console.warn(TAG$a, " 画像保存失败:", err);
     }
   }
   function persist(config) {
@@ -398,10 +398,10 @@ ${truncated.join("\n")}
       GM_setValue("ruozhi-config", json);
       const verify = GM_getValue("ruozhi-config", "");
       if (!verify || verify.length < 10) {
-        console.error(TAG$9, "Persistence verification failed: 写入后读取为空");
+        console.error(TAG$a, "Persistence verification failed: 写入后读取为空");
       }
     } catch (e) {
-      console.error(TAG$9, "Persistence failed:", e);
+      console.error(TAG$a, "Persistence failed:", e);
     }
   }
   function getLearnedProfile() {
@@ -485,7 +485,7 @@ ${truncated.join("\n")}
     } catch {
     }
   }
-  const TAG$8 = "[ruozhi-filter/gm-fetch]";
+  const TAG$9 = "[ruozhi-filter/gm-fetch]";
   class GMFetchError extends Error {
     constructor(message, opts = {}) {
       super(message);
@@ -499,7 +499,7 @@ ${truncated.join("\n")}
       return gmFetchWithXhr(url, init);
     }
     if (typeof unsafeWindow !== "undefined") {
-      log(TAG$8, "GM_xmlhttpRequest 不可用，回退 unsafeWindow.fetch");
+      log(TAG$9, "GM_xmlhttpRequest 不可用，回退 unsafeWindow.fetch");
       return unsafeWindow.fetch(url, init);
     }
     return fetch(url, init);
@@ -896,7 +896,7 @@ ${truncated.join("\n")}
       if (modalRoot === bg) modalRoot = null;
     }
   }
-  const TAG$7 = "[ruozhi-filter]";
+  const TAG$8 = "[ruozhi-filter]";
   function getPreset(config) {
     return PROVIDER_PRESETS[config.provider] ?? PROVIDER_PRESETS.custom;
   }
@@ -1048,7 +1048,7 @@ ${hasProfile ? "重要：以上用户画像优先级高于基础规则。当规�
     const userMessage = buildUserMessage$1(config, replies);
     const isRefining = shouldRefineProfile();
     if (isRefining) {
-      log(TAG$7, `触发画像更新 (评论判定附带)`);
+      log(TAG$8, `触发画像更新 (评论判定附带)`);
     }
     const reqBody = buildRequestBody(
       config,
@@ -1056,13 +1056,13 @@ ${hasProfile ? "重要：以上用户画像优先级高于基础规则。当规�
       userMessage,
       isRefining
     );
-    log(TAG$7, "请求体:", JSON.stringify(reqBody));
+    log(TAG$8, "请求体:", JSON.stringify(reqBody));
     log(
-      TAG$7,
+      TAG$8,
       "System Prompt (前500字):",
       systemPrompt.slice(0, 500) + (systemPrompt.length > 500 ? "..." : "")
     );
-    log(TAG$7, "User Message:", JSON.parse(userMessage));
+    log(TAG$8, "User Message:", JSON.parse(userMessage));
     const rpidByIndex = new Map(replies.map((r, i) => [i, r.rpid]));
     const fetchStart = Date.now();
     const fetcher = gmFetch;
@@ -1078,11 +1078,11 @@ ${hasProfile ? "重要：以上用户画像优先级高于基础规则。当规�
         headers,
         body: JSON.stringify(reqBody)
       });
-      log(TAG$7, `API HTTP ${response.status}, ${Date.now() - fetchStart}ms`);
+      log(TAG$8, `API HTTP ${response.status}, ${Date.now() - fetchStart}ms`);
       if (!response.ok) {
         const errText = await response.text();
         console.error(
-          TAG$7,
+          TAG$8,
           `API error ${response.status}:`,
           errText.slice(0, 200)
         );
@@ -1091,10 +1091,10 @@ ${hasProfile ? "重要：以上用户画像优先级高于基础规则。当规�
       const data = await response.json();
       const content = (_c = (_b = (_a = data.choices) == null ? void 0 : _a[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content;
       const usage = data.usage;
-      log(TAG$7, "DeepSeek 返回内容:", content);
-      log(TAG$7, "DeepSeek 用量:", usage);
+      log(TAG$8, "DeepSeek 返回内容:", content);
+      log(TAG$8, "DeepSeek 用量:", usage);
       if (!content) {
-        warn(TAG$7, " AI 返回空内容");
+        warn(TAG$8, " AI 返回空内容");
         return { verdicts: [], usage };
       }
       try {
@@ -1117,13 +1117,13 @@ ${hasProfile ? "重要：以上用户画像优先级高于基础规则。当规�
         return { verdicts, usage };
       } catch (e) {
         console.error(
-          TAG$7,
+          TAG$8,
           `AI response parse failed: ${e.message} | content(前300): ${content.slice(0, 300)}`
         );
         return { verdicts: [], usage };
       }
     } catch (err) {
-      console.error(TAG$7, "Network request failed:", err);
+      console.error(TAG$8, "Network request failed:", err);
       if (err instanceof GMFetchError && err.isConnectRefused) {
         showConnectPrompt(err.hostname);
       }
@@ -1166,17 +1166,17 @@ ${hasProfile ? "重要：以上用户画像优先级高于基础规则。当规�
   async function _refineProfile(force) {
     var _a, _b, _c;
     if (!force && !shouldRefineProfile()) {
-      log(TAG$7, "refineProfile: 未达阈值，跳过");
+      log(TAG$8, "refineProfile: 未达阈值，跳过");
       return;
     }
     const config = getConfig();
     if (!config.apiKey && getPreset(config).needsAuth) {
-      warn(TAG$7, " 画像更新跳过: 未配置API Key");
+      warn(TAG$8, " 画像更新跳过: 未配置API Key");
       return;
     }
     const records = config.learningCorrections;
     if (!Array.isArray(records) || records.length === 0) {
-      warn(TAG$7, " 画像更新跳过: 无学习记录");
+      warn(TAG$8, " 画像更新跳过: 无学习记录");
       return;
     }
     const savedCount = config.lastRefinedCount;
@@ -1188,17 +1188,17 @@ ${hasProfile ? "重要：以上用户画像优先级高于基础规则。当规�
       config.lastRefinedCount = savedCount;
     }
     if (!instruction) {
-      warn(TAG$7, " 画像更新跳过: 无更新指令");
+      warn(TAG$8, " 画像更新跳过: 无更新指令");
       return;
     }
     log(
-      TAG$7,
+      TAG$8,
       `${force ? "强制" : "自动"}画像更新中... (指令${instruction.length}字)`
     );
     const fetcher = gmFetch;
     const reqBody = buildRefineBody(config, instruction);
     log(
-      TAG$7,
+      TAG$8,
       "画像更新 请求体 model:",
       reqBody.model,
       "max_tokens:",
@@ -1212,25 +1212,25 @@ ${hasProfile ? "重要：以上用户画像优先级高于基础规则。当规�
         body: JSON.stringify(reqBody)
       });
       log(
-        TAG$7,
+        TAG$8,
         `画像更新 API HTTP ${response.status}, ${Date.now() - fetchStart}ms`
       );
       if (!response.ok) {
         const errText = await response.text();
         console.error(
-          TAG$7,
+          TAG$8,
           `Profile update API error ${response.status}:`,
           errText.slice(0, 300)
         );
         return;
       }
       const data = await response.json();
-      log(TAG$7, "画像更新 原始响应:", JSON.stringify(data).slice(0, 500));
+      log(TAG$8, "画像更新 原始响应:", JSON.stringify(data).slice(0, 500));
       const content = (_c = (_b = (_a = data.choices) == null ? void 0 : _a[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content;
-      console.log(TAG$7, "画像更新 DeepSeek 返回内容:", content);
+      console.log(TAG$8, "画像更新 DeepSeek 返回内容:", content);
       if (!content) {
         warn(
-          TAG$7,
+          TAG$8,
           " 画像更新: AI 返回空内容, raw choices:",
           JSON.stringify(data.choices).slice(0, 300)
         );
@@ -1245,10 +1245,10 @@ ${hasProfile ? "重要：以上用户画像优先级高于基础规则。当规�
       if (parsed.refinedProfile && typeof parsed.refinedProfile === "string") {
         applyRefinedProfile(parsed.refinedProfile);
       } else {
-        warn(TAG$7, " 画像更新: 未收到 refinedProfile 字段");
+        warn(TAG$8, " 画像更新: 未收到 refinedProfile 字段");
       }
     } catch (err) {
-      console.error(TAG$7, "Profile update failed:", err);
+      console.error(TAG$8, "Profile update failed:", err);
       if (err instanceof GMFetchError && err.isConnectRefused) {
         showConnectPrompt(err.hostname);
       }
@@ -1535,8 +1535,137 @@ ${hasProfile ? "重要：以上用户画像优先级高于基础规则。当规�
     }
     return candidates;
   }
+  const TAG$7 = "[ruozhi-filter]";
+  const UNKNOWN_UNAME = "未知用户";
+  const NESTED_COMMENT_TAGS = /* @__PURE__ */ new Set([
+    "bili-comment-thread-renderer",
+    "bili-comment-reply-renderer",
+    "bili-comment-replies-renderer"
+  ]);
+  function findScoped(root, selector) {
+    for (const child of Array.from(root.children)) {
+      const tag = child.tagName.toLowerCase();
+      if (NESTED_COMMENT_TAGS.has(tag)) continue;
+      if (child.matches(selector)) return child;
+      const inLight = findScoped(child, selector);
+      if (inLight) return inLight;
+      const sr = child.shadowRoot;
+      if (sr) {
+        const inShadow = findScoped(sr, selector);
+        if (inShadow) return inShadow;
+      }
+    }
+    return null;
+  }
+  function findInComment(el, selector) {
+    if (el.matches(selector)) return el;
+    const inLight = findScoped(el, selector);
+    if (inLight) return inLight;
+    const sr = el.shadowRoot;
+    return sr ? findScoped(sr, selector) : null;
+  }
+  function elementText(el) {
+    var _a;
+    const html = el;
+    const rendered = el.isConnected && html.getClientRects().length > 0;
+    if (rendered) {
+      const live = ((_a = html.innerText) == null ? void 0 : _a.trim()) ?? "";
+      if (live) return live;
+    }
+    const clone = el.cloneNode(true);
+    clone.querySelectorAll("style, script, noscript, template").forEach((n) => n.remove());
+    return (clone.textContent ?? "").replace(/[ \t]+/g, " ").trim();
+  }
+  function shadowInnerText(sr) {
+    const parts = [];
+    for (const child of Array.from(sr.children)) {
+      const tag = child.tagName.toLowerCase();
+      if (tag === "style" || tag === "script" || tag === "noscript") continue;
+      const text = elementText(child);
+      if (text) parts.push(text);
+    }
+    return parts.join("\n").trim();
+  }
+  function readAuthor(commentEl) {
+    const infoEl = findInComment(commentEl, "bili-comment-user-info");
+    const infoShadow = (infoEl == null ? void 0 : infoEl.shadowRoot) ?? null;
+    let uname = "";
+    let uidAttr = "";
+    const nameEl = (infoShadow == null ? void 0 : infoShadow.querySelector("#user-name")) ?? null;
+    if (nameEl) {
+      uname = (nameEl.textContent ?? "").trim();
+      uidAttr = nameEl.getAttribute("data-user-profile-id") ?? "";
+    }
+    if (!uname && infoShadow) {
+      const link = infoShadow.querySelector('a[href*="space.bilibili.com"]');
+      uname = ((link == null ? void 0 : link.textContent) ?? "").trim();
+      uidAttr = uidAttr || (link == null ? void 0 : link.getAttribute("data-user-profile-id")) || "";
+    }
+    let mid = parseInt(uidAttr, 10) || 0;
+    if (mid === 0) {
+      const withUid = findInComment(commentEl, "[data-user-profile-id]");
+      mid = parseInt((withUid == null ? void 0 : withUid.getAttribute("data-user-profile-id")) ?? "", 10) || 0;
+    }
+    if (mid === 0) {
+      const link = findInComment(commentEl, 'a[href*="space.bilibili.com"]');
+      const m = /space\.bilibili\.com\/(\d+)/.exec(
+        (link == null ? void 0 : link.getAttribute("href")) ?? ""
+      );
+      if (m) mid = parseInt(m[1], 10) || 0;
+    }
+    return { uname, mid, resolved: uname.length > 0 };
+  }
+  function readContent(commentEl) {
+    const rich = findInComment(commentEl, "bili-rich-text");
+    if (rich) {
+      const sr = rich.shadowRoot;
+      const contents = (sr == null ? void 0 : sr.querySelector("#contents")) ?? null;
+      const fromContents = contents ? elementText(contents) : "";
+      if (fromContents) return fromContents;
+      if (sr) {
+        const fromShadow = shadowInnerText(sr);
+        if (fromShadow) return fromShadow;
+      }
+      const own = elementText(rich);
+      if (own) return own;
+    }
+    const fallback = findInComment(commentEl, "#contents");
+    return fallback ? elementText(fallback) : "";
+  }
+  function extractComment(el) {
+    var _a;
+    try {
+      const author = readAuthor(el);
+      const message = readContent(el);
+      if (!message) return null;
+      let rpid = 0;
+      const rpidStr = el.getAttribute("data-rpid") ?? ((_a = findInComment(el, "[data-rpid]")) == null ? void 0 : _a.getAttribute("data-rpid"));
+      if (rpidStr) rpid = parseInt(rpidStr, 10) || 0;
+      if (!rpid) rpid = strHash(`${author.mid}:${message.slice(0, 200)}`);
+      if (!author.resolved) {
+        log(
+          TAG$7,
+          `用户名未解析（mid=${author.mid}），使用占位名；正文前 20 字：${message.slice(0, 20)}`
+        );
+      }
+      return {
+        el,
+        rpid,
+        mid: author.mid,
+        uname: author.resolved ? author.uname : UNKNOWN_UNAME,
+        message,
+        nameResolved: author.resolved
+      };
+    } catch (e) {
+      warn(TAG$7, "extractComment 异常:", e);
+      return null;
+    }
+  }
   const DB_NAME = "ruozhi-filter-db";
   const DB_VERSION = 4;
+  function isPlaceholderUname(uname) {
+    return uname.trim() === UNKNOWN_UNAME;
+  }
   let dbPromise = null;
   const blByMid = /* @__PURE__ */ new Map();
   const blByUid = /* @__PURE__ */ new Map();
@@ -1593,6 +1722,7 @@ ${hasProfile ? "重要：以上用户画像优先级高于基础规则。当规�
       const record = blByMid.get(mid);
       if (record) return record;
     }
+    if (isPlaceholderUname(uname)) return null;
     const uid = blacklistKey(uname);
     return blByUid.get(uid) ?? null;
   }
@@ -1607,17 +1737,26 @@ ${hasProfile ? "重要：以上用户画像优先级高于基础规则。当规�
       const record = await db.get("blacklist", mid);
       if (record) return record;
     }
+    if (isPlaceholderUname(uname)) return null;
     return await db.getFromIndex("blacklist", "uid", blacklistKey(uname)) ?? null;
   }
   async function addToBlacklist(record) {
+    const placeholder = isPlaceholderUname(record.uname);
+    if (placeholder && record.mid <= 0) {
+      warn(
+        "[ruozhi-filter]",
+        "拒绝写入黑名单：用户名未解析且无 mid（会与其他用户碰撞）"
+      );
+      return;
+    }
     const db = await getDB();
-    const uid = blacklistKey(record.uname);
+    const uid = placeholder ? 0 : blacklistKey(record.uname);
     const key = record.mid > 0 ? record.mid : uid;
     const entry = { ...record, mid: key, uid };
     await db.put("blacklist", entry);
     if (memoryCacheReady) {
       blByMid.set(key, entry);
-      blByUid.set(uid, entry);
+      if (uid > 0) blByUid.set(uid, entry);
     }
   }
   async function getAllBlacklist() {
@@ -2047,139 +2186,6 @@ ${hasProfile ? "重要：以上用户画像优先级高于基础规则。当规�
     }
     if (!currentContext.oid) {
       location.pathname.match(/\/video\/(BV\w+)/);
-    }
-  }
-  const IGNORE_TEXTS = /* @__PURE__ */ new Set([
-    "回复",
-    "举报",
-    "硬核会员举报",
-    "点赞",
-    "踩",
-    "收起",
-    "展开",
-    "·",
-    ">>",
-    "查看全文",
-    "热评",
-    "置顶",
-    "UP主",
-    "笔记",
-    "UP主觉得很赞",
-    "UP主赞过",
-    "发起会话",
-    "关注",
-    "已关注",
-    "复制评论链接",
-    "加入黑名单",
-    "记笔记",
-    // UP主可见的操作按钮文本（不应混入评论内容发送给AI）
-    "设为置顶",
-    "删除",
-    "设置屏蔽词"
-  ]);
-  function isUIText(s) {
-    if (/^(\d+|[\d.]+[万亿]?|\d+:\d+|\d+楼|#\d+)$/.test(s)) return true;
-    if (/^\d{4}-\d{2}-\d{2}\s*\d{2}:\d{2}$/.test(s)) return true;
-    if (/^(刚刚|\d+分钟前|\d+小时前|昨天|\d+天前)$/.test(s)) return true;
-    if (/^(共\s*\d+\s*条回复|展开\s*\d+\s*条回复|查看全部\s*\d+\s*条)$/.test(s))
-      return true;
-    return false;
-  }
-  function extractComment(el) {
-    var _a;
-    try {
-      let deepInnerText = function(root) {
-        var _a2;
-        let text = "";
-        for (const child of root.children) {
-          const el2 = child;
-          const tag2 = el2.tagName.toLowerCase();
-          if (tag2 === "style") continue;
-          const cls = String(
-            el2.className || el2.getAttribute("class") || ""
-          ).toLowerCase();
-          if (cls.includes("sub-reply") || cls.includes("reply-item") || cls.includes("fan") || cls.includes("medal") || tag2.includes("-reply") || tag2.includes("-replies"))
-            continue;
-          if (cls.includes("report") || cls.includes("operation") || cls.includes("btn") || cls.includes("action") || cls.includes("pin") || cls.includes("shield") || cls.includes("up-") || tag2 === "button")
-            continue;
-          if (el2.shadowRoot) {
-            text += deepInnerText(el2.shadowRoot) + "\n";
-          } else if (el2.children.length > 0) {
-            text += deepInnerText(el2) + "\n";
-          } else {
-            const t = (_a2 = el2.innerText) == null ? void 0 : _a2.trim();
-            if (t) text += t + "\n";
-          }
-        }
-        return text;
-      }, findRpid = function(root) {
-        const el2 = root.querySelector("[data-rpid]");
-        if (el2) return el2.getAttribute("data-rpid");
-        for (const child of root.children) {
-          const c = child;
-          if (c.shadowRoot) {
-            const r = findRpid(c.shadowRoot);
-            if (r) return r;
-          }
-        }
-        return null;
-      }, findMid = function(root) {
-        const el2 = root.querySelector(
-          "[data-mid], [data-uid], [data-user-profile-id]"
-        );
-        if (el2)
-          return el2.getAttribute("data-mid") ?? el2.getAttribute("data-uid") ?? el2.getAttribute("data-user-profile-id");
-        for (const child of root.children) {
-          const c = child;
-          if (c.shadowRoot) {
-            const r = findMid(c.shadowRoot);
-            if (r) return r;
-          }
-        }
-        return null;
-      };
-      const tag = el.tagName.toLowerCase();
-      let fullText = "";
-      if (el.shadowRoot) {
-        fullText = deepInnerText(el.shadowRoot).trim();
-      }
-      if (!fullText) {
-        fullText = ((_a = el.innerText) == null ? void 0 : _a.trim()) ?? "";
-      }
-      if (fullText.length < 3) return null;
-      let rpid = 0;
-      const rpidStr = el.getAttribute("data-rpid") ?? (el.shadowRoot ? findRpid(el.shadowRoot) : null);
-      if (rpidStr) rpid = parseInt(rpidStr);
-      if (!rpid) {
-        const hashInput = `${tag}:${fullText.slice(0, 300)}`;
-        rpid = strHash(hashInput);
-      }
-      let mid = 0;
-      const midStr = el.getAttribute("data-mid") ?? el.getAttribute("data-uid") ?? el.getAttribute("data-user-profile-id") ?? (el.shadowRoot ? findMid(el.shadowRoot) : null);
-      if (midStr) mid = parseInt(midStr) || 0;
-      const lines = fullText.split("\n").map((l) => l.trim()).filter(Boolean);
-      const contentLines = lines.filter((l) => {
-        if (IGNORE_TEXTS.has(l)) return false;
-        if (isUIText(l)) return false;
-        return true;
-      });
-      if (contentLines.length === 0) return null;
-      const uname = contentLines.find(
-        (l) => l.length >= 2 && l.length <= 20 && !/^\d/.test(l) && !l.includes("·") && !l.includes("分钟") && !l.includes("小时") && !l.includes("刚刚") && !l.includes("昨天")
-      ) ?? "未知用户";
-      const msgParts = contentLines.filter(
-        (l) => l !== uname || contentLines.filter((x) => x === l).length > 1
-      );
-      let message = msgParts.join(" ");
-      message = message.replace(/\s*共\s*\d+\s*条回复[，,.]?\s*$/g, "").trim();
-      if (uname !== "未知用户" && message.startsWith(uname)) {
-        message = message.slice(uname.length).trim();
-      }
-      if (!message) return null;
-      return { el, rpid, mid, uname, message };
-    } catch (e) {
-      warn("[ruozhi-filter]", "  extractComment 异常:", e);
-      return null;
     }
   }
   const TAG$5 = "[ruozhi-filter]";
@@ -2641,6 +2647,29 @@ ${hasProfile ? "重要：以上用户画像优先级高于基础规则。当规�
     uw.__ruozhi_flush = () => flushBatch();
     uw.__ruozhi_inspect = () => inspectShadowRoot();
     uw.__ruozhi_reset_stats = () => resetStats();
+    uw.__ruozhi_extract = () => {
+      const root = getCommentRoot();
+      if (!root) {
+        console.warn(TAG$3, "未找到评论区根节点");
+        return [];
+      }
+      const rows = Array.from(findCommentElements(root)).map((el, i) => {
+        const info = extractComment(el);
+        if (!info) {
+          return { i, uname: "(抽取失败)", mid: 0, resolved: false, msgLen: 0, msg: "" };
+        }
+        return {
+          i,
+          uname: info.uname,
+          mid: info.mid,
+          resolved: info.nameResolved,
+          msgLen: info.message.length,
+          msg: info.message.slice(0, 80)
+        };
+      });
+      console.table(rows);
+      return rows;
+    };
   }
   const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', Helvetica, Arial, sans-serif";
   const THEMES = {
