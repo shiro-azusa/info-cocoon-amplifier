@@ -1963,9 +1963,38 @@ export function foldEl(
         });
       origElDiv
         .querySelector(".ruozhi-report-btn")
-        ?.addEventListener("click", (e) => {
+        ?.addEventListener("click", async (e) => {
           e.stopPropagation();
-          triggerReport(el, verdict.reason);
+          // 先恢复可见：隐藏元素无法参与布局，B站菜单会因此闪退或干脆不出现
+          const restoreVisible = chainShowVisible(el);
+          let restored = false;
+          const restore = () => {
+            if (restored) return;
+            restored = true;
+            restoreVisible();
+          };
+          // 兜底1：弹窗迟迟没打开也要还原（16s，给 report.ts 内部 4s 轮询留足余量）
+          const fallback = setTimeout(restore, 16000);
+          // 兜底2：举报失败或弹窗没开时立刻还原；成功则保持展开，避免弹窗被一起关掉
+          const onPopupOpened = () => {
+            clearTimeout(fallback);
+            restore();
+          };
+          try {
+            // 把 el 自身传下去。report.ts 会沿祖先链探测「哪个渲染器的 shadowRoot
+            // 里能查到 action-buttons」，从而锁定本条评论自己的操作栏，
+            // 避免误用该楼第一条评论的举报界面。
+            const { opened } = await triggerReport(
+              el,
+              verdict.reason,
+              onPopupOpened,
+            );
+            clearTimeout(fallback);
+            if (!opened) restore();
+          } catch {
+            clearTimeout(fallback);
+            restore();
+          }
         });
     }
 
@@ -2020,6 +2049,28 @@ function blBtnStyle(): Record<string, string> {
 
 function rptBtnStyle(): Record<string, string> {
   return { ...blBtnStyle(), color: COLOR.red, borderColor: COLOR.redBg };
+}
+/** 把 el 及其所有祖先（含 Shadow DOM 宿主）恢复可见，返回还原函数 */
+function chainShowVisible(el: Element): () => void {
+  const saved: Array<{ node: HTMLElement; display: string }> = [];
+  let node: Node | null = el;
+  while (node) {
+    if (node instanceof HTMLElement) {
+      saved.push({ node, display: node.style.display });
+      if (node.style.display === "none") node.style.display = "";
+    }
+    const root = node.getRootNode();
+    node =
+      root instanceof ShadowRoot
+        ? (root.host as Node)
+        : node.parentNode;
+  }
+  return () => {
+    for (let i = saved.length - 1; i >= 0; i--) {
+      const it = saved[i];
+      it.node.style.display = it.display;
+    }
+  };
 }
 
 function rptBtnHover(): Record<string, string> {

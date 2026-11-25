@@ -1751,27 +1751,43 @@ ${hasProfile ? "重要：以上用户画像优先级高于基础规则。当规�
       return ok;
     }
   }
-  function findByText(root, text) {
-    const walk = (node) => {
+  function findByText(root, text, deep = true) {
+    if (!root) return null;
+    const best = {
+      exact: null,
+      partial: null,
+      exactKids: Number.POSITIVE_INFINITY,
+      partialKids: Number.POSITIVE_INFINITY
+    };
+    const visit = (node, depth) => {
       var _a, _b;
+      if (depth > 20) return;
       for (const child of node.children) {
         const el = child;
-        if ((((_a = el.innerText) == null ? void 0 : _a.trim()) || ((_b = el.textContent) == null ? void 0 : _b.trim()) || "") === text)
-          return el;
-        if (el.shadowRoot) {
-          const f = walk(el.shadowRoot);
-          if (f) return f;
+        const t = (((_a = el.innerText) == null ? void 0 : _a.trim()) || ((_b = el.textContent) == null ? void 0 : _b.trim()) || "").trim();
+        if (t) {
+          const n = el.querySelectorAll("*").length;
+          if (t === text) {
+            if (n < best.exactKids) {
+              best.exact = el;
+              best.exactKids = n;
+            }
+          } else if (t.includes(text)) {
+            if (n < best.partialKids) {
+              best.partial = el;
+              best.partialKids = n;
+            }
+          }
         }
-        if (el.children.length > 0) {
-          const f = walk(el);
-          if (f) return f;
+        if (deep && el.shadowRoot) {
+          visit(el.shadowRoot, depth + 1);
         }
+        if (el.children.length > 0) visit(el, depth + 1);
       }
-      return null;
     };
-    return walk(
-      root instanceof Element ? root.shadowRoot ?? root : root
-    );
+    const start = root instanceof Element ? root.shadowRoot ?? root : root;
+    visit(start, 0);
+    return best.exact ?? best.partial;
   }
   function waitFor(cb, ms) {
     return new Promise((r) => {
@@ -1784,29 +1800,155 @@ ${hasProfile ? "重要：以上用户画像优先级高于基础规则。当规�
       c();
     });
   }
-  function deepFind(root, sel) {
-    const e = root.querySelector(sel);
-    if (e) return e;
-    for (const c of root.children) {
-      const ce = c;
-      if (ce.shadowRoot) {
-        const f = deepFind(ce.shadowRoot, sel);
-        if (f) return f;
+  function deepFindAllDeep(root, sel, out = []) {
+    try {
+      const found = root.querySelectorAll(sel);
+      for (const e of found) out.push(e);
+    } catch {
+    }
+    for (const child of root.children) {
+      const ce = child;
+      if (ce.shadowRoot) deepFindAllDeep(ce.shadowRoot, sel, out);
+      deepFindAllDeep(ce, sel, out);
+    }
+    return out;
+  }
+  function actionBarScopes(renderer) {
+    const out = [];
+    const push = (s) => {
+      if (s && !out.includes(s)) out.push(s);
+    };
+    push(renderer);
+    push(renderer.shadowRoot);
+    if (renderer.shadowRoot) {
+      for (const c of renderer.shadowRoot.children) {
+        const ce = c;
+        push(ce.shadowRoot);
+        push(ce);
       }
     }
+    for (const c of renderer.children) {
+      const ce = c;
+      push(ce.shadowRoot);
+    }
+    let node = renderer;
+    let guard = 0;
+    while (node && guard < 12) {
+      guard++;
+      if (node instanceof ShadowRoot) {
+        push(node);
+        node = node.host;
+        continue;
+      }
+      const el = node;
+      push(el.shadowRoot ?? null);
+      const root = node.getRootNode();
+      node = root instanceof ShadowRoot ? root.host : el.parentNode;
+    }
+    return out;
+  }
+  function findActionBar(renderer) {
+    const scopes = actionBarScopes(renderer);
+    for (let i = 0; i < scopes.length; i++) {
+      const s = scopes[i];
+      let hit = null;
+      try {
+        hit = s.querySelector("bili-comment-action-buttons-renderer");
+      } catch {
+        hit = null;
+      }
+      if (hit) {
+        if (i > 0) {
+          log(TAG$6, "action-buttons 命中于候选作用域 #" + i);
+        }
+        return hit;
+      }
+    }
+    warn(TAG$6, scopes.length + " 个候选作用域全部未命中 action-buttons");
     return null;
   }
-  function findCommentRenderer(el) {
-    const rootNode = el.getRootNode();
-    const shadowHost = rootNode instanceof ShadowRoot ? rootNode.host : null;
-    if (shadowHost && shadowHost.tagName.toLowerCase().includes("comment-renderer")) {
-      return shadowHost;
+  function collectRendererCandidates(el) {
+    const out = [];
+    const isRenderer = (t) => t === "bili-comment-renderer" || t === "bili-comment-reply-renderer" || t === "bili-comment-thread-renderer";
+    let node = el;
+    let guard = 0;
+    while (node && guard < 20) {
+      guard++;
+      if (node instanceof Element) {
+        const t = node.tagName.toLowerCase();
+        if (isRenderer(t)) out.push(node);
+        else if (t.includes("comment-renderer") || t.includes("comment-thread"))
+          out.push(node);
+      }
+      if (node instanceof ShadowRoot) {
+        const host = node.host;
+        const t = host.tagName.toLowerCase();
+        if (isRenderer(t)) out.push(host);
+        node = host;
+        continue;
+      }
+      const root = node.getRootNode();
+      node = root instanceof ShadowRoot ? root.host : node.parentNode;
     }
-    const found = el.closest("bili-comment-renderer") ?? el.closest("bili-comment-thread-renderer");
-    if (found) return found;
-    return el;
+    if (!out.includes(el)) out.push(el);
+    return out;
   }
-  async function triggerReport(commentEl, reason) {
+  function findCommentRenderer(el) {
+    const candidates = collectRendererCandidates(el);
+    for (const c of candidates) {
+      const sr = c.shadowRoot;
+      if (sr && sr.querySelector("bili-comment-action-buttons-renderer")) {
+        log(TAG$6, "renderer 命中:", c.tagName.toLowerCase());
+        return c;
+      }
+    }
+    log(
+      TAG$6,
+      "renderer 未命中，候选链:",
+      candidates.map((c) => c.tagName.toLowerCase()).join(" > ")
+    );
+    return candidates[0] ?? el;
+  }
+  function findMoreButton(renderer) {
+    const actionBar = findActionBar(renderer);
+    if (!actionBar) return null;
+    const pick = (scope) => {
+      const more = scope.querySelector("#more");
+      if (!more) return null;
+      const btn = more.querySelector("button") ?? more.querySelector(
+        'button, [role="button"], [tabindex], [class*="btn"], [class*="button"], [class*="more"]'
+      );
+      const target = btn ?? more;
+      return target.isConnected ? target : null;
+    };
+    const scopes = [];
+    if (actionBar.shadowRoot) scopes.push(actionBar.shadowRoot);
+    scopes.push(actionBar);
+    for (const s of scopes) {
+      const hit = pick(s);
+      if (hit) {
+        log(TAG$6, "命中「更多」按钮");
+        return hit;
+      }
+    }
+    warn(TAG$6, "action-buttons 内找不到 #more");
+    return null;
+  }
+  function isMenuVisible(menu) {
+    if (!menu) return false;
+    const styleAttr = menu.getAttribute("style") || "";
+    if (styleAttr.includes("--bili-comment-menu-display:block")) return true;
+    try {
+      const cs = getComputedStyle(menu);
+      if (cs.display === "none" || cs.visibility === "hidden") return false;
+      if (parseFloat(cs.opacity || "1") < 0.1) return false;
+      const rect = menu.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) return true;
+    } catch {
+    }
+    return false;
+  }
+  async function triggerReport(commentEl, reason, onPopupOpened) {
     var _a;
     const reasonCopied = await copyToClipboard(reason);
     if (reasonCopied) showToast("已复制 AI 判定理由，请粘贴到举报框 (Cmd+V)");
@@ -1825,73 +1967,60 @@ ${hasProfile ? "重要：以上用户画像优先级高于基础规则。当规�
     await new Promise((r) => requestAnimationFrame(r));
     await new Promise((r) => requestAnimationFrame(r));
     try {
-      const sr = renderer.shadowRoot;
-      if (!sr) {
-        warn(TAG$6, "No shadowRoot:", renderer.tagName);
-        return { opened: false, reasonCopied };
-      }
-      const actionBar = deepFind(sr, "bili-comment-action-buttons-renderer");
-      if (!actionBar || !actionBar.shadowRoot) {
-        warn(
-          TAG$6,
-          "No action-buttons found",
-          "| 子元素:",
-          [...sr.children].map((c) => c.tagName.toLowerCase())
-        );
-        return { opened: false, reasonCopied };
-      }
-      const actionSR = actionBar.shadowRoot;
-      const moreBtn = actionSR.querySelector(
-        "#more button"
-      );
+      const moreBtn = findMoreButton(renderer);
       if (!moreBtn) {
         warn(TAG$6, "No 'More' button found");
         return { opened: false, reasonCopied };
       }
       log(TAG$6, "Clicking 'More'...");
       moreBtn.click();
+      let menuEl = null;
       const ok = await waitFor(() => {
-        const m = actionSR.querySelector(
-          "bili-comment-menu"
-        );
-        return !!((m == null ? void 0 : m.shadowRoot) && (m.getAttribute("style") || "").includes(
-          "--bili-comment-menu-display:block"
-        ));
-      }, 2e3);
+        const bar = findActionBar(renderer);
+        const scope = bar ? bar.shadowRoot ?? bar : null;
+        menuEl = scope ? scope.querySelector("bili-comment-menu") : null;
+        return isMenuVisible(menuEl);
+      }, 2500);
       if (!ok) {
         warn(TAG$6, "Menu did not appear");
         return { opened: false, reasonCopied };
       }
-      const menuEl = actionSR.querySelector("bili-comment-menu");
-      const reportLi = findByText(
-        menuEl.shadowRoot,
-        "举报"
-      );
+      const reportLi = findByText(menuEl ?? null, "举报");
       if (!reportLi) {
         warn(TAG$6, "No 'Report' found in menu");
         return { opened: false, reasonCopied };
       }
       log(TAG$6, "Clicking 'Report'...");
       reportLi.click();
-      waitAndFillReportForm(reason);
+      waitAndFillReportForm(reason, onPopupOpened);
       log(TAG$6, "Native report triggered");
       return { opened: true, reasonCopied };
     } finally {
       renderer.style.display = prevDisplay;
     }
   }
-  function waitAndFillReportForm(reason) {
+  function waitAndFillReportForm(reason, onPopupOpened) {
     const s = Date.now();
     let n = 0;
+    let popupNotified = false;
+    const notifyPopupOpened = () => {
+      if (popupNotified) return;
+      popupNotified = true;
+      onPopupOpened == null ? void 0 : onPopupOpened();
+    };
     const f = () => {
       var _a;
       n++;
-      const popup = document.querySelector("bili-comments-popup");
+      const popup = deepFindAllDeep(document.body, "bili-comments-popup")[0];
       if (!popup) {
         if (Date.now() - s < 4e3) setTimeout(f, 200);
         return;
       }
-      const form = popup.querySelector("bili-comment-report-form");
+      notifyPopupOpened();
+      const form = deepFindAllDeep(
+        popup,
+        "bili-comment-report-form"
+      )[0];
       if (!form || !form.shadowRoot) {
         if (Date.now() - s < 4e3) setTimeout(f, 200);
         return;
@@ -4151,9 +4280,32 @@ ${hasProfile ? "重要：以上用户画像优先级高于基础规则。当规�
           e.stopPropagation();
           copyReason(verdict.reason);
         });
-        (_f = origElDiv.querySelector(".ruozhi-report-btn")) == null ? void 0 : _f.addEventListener("click", (e) => {
+        (_f = origElDiv.querySelector(".ruozhi-report-btn")) == null ? void 0 : _f.addEventListener("click", async (e) => {
           e.stopPropagation();
-          triggerReport(el, verdict.reason);
+          const restoreVisible = chainShowVisible(el);
+          let restored = false;
+          const restore = () => {
+            if (restored) return;
+            restored = true;
+            restoreVisible();
+          };
+          const fallback = setTimeout(restore, 16e3);
+          const onPopupOpened = () => {
+            clearTimeout(fallback);
+            restore();
+          };
+          try {
+            const { opened } = await triggerReport(
+              el,
+              verdict.reason,
+              onPopupOpened
+            );
+            clearTimeout(fallback);
+            if (!opened) restore();
+          } catch {
+            clearTimeout(fallback);
+            restore();
+          }
         });
       }
       return true;
@@ -4198,6 +4350,24 @@ ${hasProfile ? "重要：以上用户画像优先级高于基础规则。当规�
   }
   function rptBtnStyle() {
     return { ...blBtnStyle(), color: COLOR.red, borderColor: COLOR.redBg };
+  }
+  function chainShowVisible(el) {
+    const saved = [];
+    let node = el;
+    while (node) {
+      if (node instanceof HTMLElement) {
+        saved.push({ node, display: node.style.display });
+        if (node.style.display === "none") node.style.display = "";
+      }
+      const root = node.getRootNode();
+      node = root instanceof ShadowRoot ? root.host : node.parentNode;
+    }
+    return () => {
+      for (let i = saved.length - 1; i >= 0; i--) {
+        const it = saved[i];
+        it.node.style.display = it.display;
+      }
+    };
   }
   function rptBtnHover() {
     return { color: "#fff", borderColor: COLOR.red, background: COLOR.red };
