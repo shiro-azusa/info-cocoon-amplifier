@@ -4,11 +4,23 @@
 // ============================================================
 import { openDB, type IDBPDatabase } from "idb";
 import type { BlacklistRecord, CacheEntry } from "./types";
-import { log } from "./debug";
+import { log, warn } from "./debug";
 import { strHash } from "./dom-utils";
+import { UNKNOWN_UNAME } from "./comment-extractor";
 
 const DB_NAME = "ruozhi-filter-db";
 const DB_VERSION = 4;
+
+/**
+ * 用户名是否是「没解析出来」的占位名。
+ *
+ * ★ 占位名没有身份含义。黑名单原本的设计是「mid 优先，缺失时退回
+ *   strHash(用户名)」——一旦占位名参与哈希，所有名字解析失败的评论
+ *   都会算出同一个键，挤进同一条记录，然后互相命中、批量折叠。
+ */
+function isPlaceholderUname(uname: string): boolean {
+  return uname.trim() === UNKNOWN_UNAME;
+}
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
 
@@ -93,6 +105,9 @@ export function isBlacklistedSync(
     const record = blByMid.get(mid);
     if (record) return record;
   }
+  // ★ 占位名没有身份含义，不能拿它去查名字哈希：
+  //   否则任何一条历史脏记录都会让所有「名字没解析出来」的评论被折叠。
+  if (isPlaceholderUname(uname)) return null;
   const uid = blacklistKey(uname);
   return blByUid.get(uid) ?? null;
 }
@@ -117,6 +132,8 @@ export async function isBlacklisted(
     const record = await db.get("blacklist", mid);
     if (record) return record;
   }
+  // ★ 同 isBlacklistedSync：占位名不参与名字哈希查询
+  if (isPlaceholderUname(uname)) return null;
   // fallback: username hash (mid为0时)
   return (
     (await db.getFromIndex("blacklist", "uid", blacklistKey(uname))) ?? null
@@ -125,8 +142,21 @@ export async function isBlacklisted(
 
 /** 将用户加入黑名单 (key = mid, fallback to username hash) */
 export async function addToBlacklist(record: BlacklistRecord): Promise<void> {
+  const placeholder = isPlaceholderUname(record.uname);
+
+  // ★ 名字没解析出来 + 没有 mid = 没有可靠身份，写进去只能得到一条会误伤
+  //   所有人的脏记录。宁可不写：这条评论本身仍会按正文 hash 折叠。
+  if (placeholder && record.mid <= 0) {
+    warn(
+      "[ruozhi-filter]",
+      "拒绝写入黑名单：用户名未解析且无 mid（会与其他用户碰撞）",
+    );
+    return;
+  }
+
   const db = await getDB();
-  const uid = blacklistKey(record.uname);
+  // 占位名不进 uid 索引，避免后续按名字误匹配
+  const uid = placeholder ? 0 : blacklistKey(record.uname);
   // B站新UI的Shadow DOM不总是暴露data-mid，此时用username hash做key
   const key = record.mid > 0 ? record.mid : uid;
   const entry = { ...record, mid: key, uid };
@@ -134,7 +164,7 @@ export async function addToBlacklist(record: BlacklistRecord): Promise<void> {
   // 同步更新内存
   if (memoryCacheReady) {
     blByMid.set(key, entry);
-    blByUid.set(uid, entry);
+    if (uid > 0) blByUid.set(uid, entry);
   }
 }
 

@@ -344,4 +344,29 @@ export function startDOMScanner(): void {
   uw.__ruozhi_flush = () => flushBatch();
   uw.__ruozhi_inspect = () => inspectShadowRoot();
   uw.__ruozhi_reset_stats = () => resetStats();
+  // 逐条打印「抽取器当前解出的字段」：验证用户名/正文解析是否正确（尤其是
+  // 含间隔号的用户名、带图标+文字的链接文字、是否被静默丢弃）
+  uw.__ruozhi_extract = () => {
+    const root = getCommentRoot();
+    if (!root) {
+      console.warn(TAG, "未找到评论区根节点");
+      return [];
+    }
+    const rows = Array.from(findCommentElements(root)).map((el, i) => {
+      const info = extractComment(el);
+      if (!info) {
+        return { i, uname: "(抽取失败)", mid: 0, resolved: false, msgLen: 0, msg: "" };
+      }
+      return {
+        i,
+        uname: info.uname,
+        mid: info.mid,
+        resolved: info.nameResolved,
+        msgLen: info.message.length,
+        msg: info.message.slice(0, 80),
+      };
+    });
+    console.table(rows);
+    return rows;
+  };
 }
